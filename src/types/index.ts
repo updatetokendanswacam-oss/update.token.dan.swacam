@@ -54,3 +54,99 @@ export interface InviteLink {
   usedBy?: string[];
   active: boolean;
 }
+
+// ======================
+// FITUR TOKEN & TRANSAKSI
+// ======================
+export interface TokenBalance {
+  currentBalance: number; // Saldo token (KWh atau unit token)
+  totalUsed: number;      // Total pemakaian token
+  lowThreshold: number;   // Batas peringatan token menipis
+  unit: string;           // 'KWh' atau 'Token'
+  lastUpdated: string;    // ISO timestamp
+}
+
+export interface TokenPackage {
+  id: string;
+  name: string;
+  tokenAmount: number;    // Jumlah token yang didapat (misal 50 kWh / 100 kWh)
+  price: number;          // Harga dalam Rupiah (e.g. 50000, 100000)
+  popular?: boolean;
+  bonus?: number;
+  description: string;
+}
+
+export type TransactionStatus = 'pending' | 'success' | 'failed' | 'cancelled';
+
+export interface TokenTransaction {
+  id: string;
+  referenceNumber: string; // TRX-202609-XXXX
+  packageId?: string;
+  packageName: string;
+  tokenAmount: number;
+  price: number;
+  paymentMethod: string;
+  paymentMethodCode: 'qris' | 'bca_va' | 'mandiri_va' | 'bri_va' | 'bank_transfer';
+  status: TransactionStatus;
+  createdAt: string;
+  verifiedAt?: string;
+  failedReason?: string;
+  createdBy: string;
+  isDemo: boolean;
+}
+
+// ======================
+// FITUR MODUL SWACAM
+// ======================
+export type SwacamConnectionStatus = 'connected' | 'disconnected' | 'connecting' | 'error';
+
+export interface SwacamConfig {
+  isConnected: boolean;
+  connectionStatus: SwacamConnectionStatus;
+  apiUrl: string;
+  apiKeyMasked: string;
+  provider: string; // e.g., 'PLN SWACAM Gateway'
+  syncIntervalMinutes: number;
+  lastSyncTime?: string;
+  lastSyncStatus?: 'success' | 'failed' | 'idle';
+  totalReadings: number;
+  successRate: number;
+  autoSync: boolean;
+  allowDisconnect: boolean;
+}
+
+export interface SwacamLog {
+  id: string;
+  timestamp: string;
+  level: 'info' | 'success' | 'warning' | 'error';
+  event: string;
+  message: string;
+  siteId?: string;
+}
+
+// ======================
+// FITUR PENGATURAN & TAMPILAN
+// ======================
+export interface AppSettings {
+  theme: 'light' | 'dark';
+  language: 'id' | 'en';
+  notifications: boolean;
+  emailAlerts: boolean;
+  soundAlerts: boolean;
+  tokenLowWarning: boolean;
+}
+
+export interface TokenSystemConfig {
+  provider: string;
+  endpointUrl: string;
+  apiKeyMasked: string;
+  tokenVersion: string;
+  autoBatchSize: number;
+  timeoutSeconds: number;
+  environment: 'demo' | 'sandbox' | 'production';
+  lastValidated?: string;
+  isValidated: boolean;
+}
+
+// Navigation tabs: exclusively Beranda (Dashboard) & Pengaturan (Settings)
+export type NavTab = 'dashboard' | 'settings';

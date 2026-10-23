@@ -23,7 +23,8 @@ export const CameraModal: React.FC<CameraModalProps> = ({
   const [isProcessing, setIsProcessing] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const directCameraInputRef = useRef<HTMLInputElement | null>(null);
+  const galleryInputRef = useRef<HTMLInputElement | null>(null);
 
   // Stop camera when closing
   useEffect(() => {
@@ -224,35 +225,53 @@ export const CameraModal: React.FC<CameraModalProps> = ({
               )}
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* Opsi 1: Buka Kamera Khusus Ambil Foto Langsung */}
                 <button
-                  onClick={startCamera}
-                  className="p-5 rounded-2xl bg-blue-600/15 hover:bg-blue-600/25 border-2 border-dashed border-blue-500/50 hover:border-blue-400 flex flex-col items-center justify-center gap-3 text-center transition group cursor-pointer"
+                  type="button"
+                  onClick={() => {
+                    // Coba buka kamera HP langsung via input capture
+                    if (directCameraInputRef.current) {
+                      directCameraInputRef.current.click();
+                    } else {
+                      startCamera();
+                    }
+                  }}
+                  className="p-5 rounded-2xl bg-blue-600/20 hover:bg-blue-600/30 border-2 border-dashed border-blue-500/70 hover:border-blue-400 flex flex-col items-center justify-center gap-3 text-center transition group cursor-pointer"
                 >
-                  <div className="p-3 rounded-full bg-blue-600 text-white group-hover:scale-110 transition-transform">
+                  <div className="p-3.5 rounded-full bg-blue-600 text-white group-hover:scale-110 shadow-lg shadow-blue-900/50 transition-transform">
                     <Camera className="w-6 h-6" />
                   </div>
                   <div>
-                    <p className="font-bold text-sm text-white">Buka Kamera Langsung</p>
-                    <p className="text-xs text-slate-400 mt-0.5">Ambil foto langsung dari kamera HP/laptop</p>
+                    <p className="font-bold text-sm text-white flex items-center justify-center gap-1.5">
+                      <span>Buka Kamera</span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/30 text-blue-300 font-semibold uppercase">Langsung</span>
+                    </p>
+                    <p className="text-xs text-slate-300 mt-1">Akses langsung ke kamera HP untuk jepret foto KWh</p>
                   </div>
                 </button>
 
+                {/* Opsi 2: Pilih Dari Galeri / File (Tanpa buka kamera) */}
                 <button
-                  onClick={() => fileInputRef.current?.click()}
-                  className="p-5 rounded-2xl bg-slate-800/60 hover:bg-slate-800 border-2 border-dashed border-slate-700 hover:border-slate-500 flex flex-col items-center justify-center gap-3 text-center transition group cursor-pointer"
+                  type="button"
+                  onClick={() => galleryInputRef.current?.click()}
+                  className="p-5 rounded-2xl bg-emerald-600/15 hover:bg-emerald-600/25 border-2 border-dashed border-emerald-500/60 hover:border-emerald-400 flex flex-col items-center justify-center gap-3 text-center transition group cursor-pointer"
                 >
-                  <div className="p-3 rounded-full bg-emerald-600 text-white group-hover:scale-110 transition-transform">
+                  <div className="p-3.5 rounded-full bg-emerald-600 text-white group-hover:scale-110 shadow-lg shadow-emerald-900/50 transition-transform">
                     <Upload className="w-6 h-6" />
                   </div>
                   <div>
-                    <p className="font-bold text-sm text-white">Pilih Dari Galeri / File</p>
-                    <p className="text-xs text-slate-400 mt-0.5">Unggah foto KWh meter yang sudah ada</p>
+                    <p className="font-bold text-sm text-white flex items-center justify-center gap-1.5">
+                      <span>Pilih Dari Galeri / File</span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/30 text-emerald-300 font-semibold uppercase">Galeri</span>
+                    </p>
+                    <p className="text-xs text-slate-300 mt-1">Buka galeri / album foto jika sudah ada foto sebelumnya</p>
                   </div>
                 </button>
               </div>
 
+              {/* Input khusus Kamera Langsung (capture="environment") */}
               <input
-                ref={fileInputRef}
+                ref={directCameraInputRef}
                 type="file"
                 accept="image/*"
                 capture="environment"
@@ -260,10 +279,30 @@ export const CameraModal: React.FC<CameraModalProps> = ({
                 className="hidden"
               />
 
+              {/* Input khusus Galeri HP / File (murni tanpa capture agar langsung ke galeri foto) */}
+              <input
+                ref={galleryInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleFileUpload}
+                className="hidden"
+              />
+
+              {/* Opsi alternatif kamera live streaming di browser */}
+              <div className="pt-1 text-center">
+                <button
+                  type="button"
+                  onClick={startCamera}
+                  className="text-xs text-blue-400 hover:text-blue-300 underline underline-offset-4 cursor-pointer"
+                >
+                  Atau gunakan live viewfinder kamera web
+                </button>
+              </div>
+
               <div className="p-3 rounded-xl bg-slate-800/40 border border-slate-800 text-[11px] text-slate-400 space-y-1">
                 <p className="font-semibold text-slate-300">ℹ️ Ketentuan Dokumentasi Foto:</p>
                 <p>• Foto akan otomatis distempel dengan Site ID, Nama Site, Meter ID, serta Waktu Lengkap (Tanggal & Jam WIB).</p>
-                <p>• Foto tersimpan aman tanpa masa kedaluwarsa dan dapat diunduh kapanpun.</p>
+                <p>• Foto tersimpan aman di basis data offline (IndexedDB) tanpa masa kedaluwarsa.</p>
               </div>
             </div>
           )}

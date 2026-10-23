@@ -12,9 +12,17 @@ import {
   savePhotoToDB,
   deletePhotoFromDB,
 } from './utils/storage';
-import { User, UpdateCategory, SiteItem, PhotoRecord, UserRole, InviteLink } from './types';
+import {
+  User,
+  UpdateCategory,
+  SiteItem,
+  PhotoRecord,
+  UserRole,
+  InviteLink,
+} from './types';
 import { INITIAL_CATEGORIES, INITIAL_USERS } from './utils/initialData';
 import { Header } from './components/Header';
+import { Sidebar } from './components/Sidebar';
 import { OfflineBanner } from './components/OfflineBanner';
 import { TeamStatusRoster } from './components/TeamStatusRoster';
 import { DashboardOverview } from './components/DashboardOverview';
@@ -33,19 +41,20 @@ import { InviteModal } from './components/InviteModal';
 import { LoginModal } from './components/LoginModal';
 import { ConfirmDeleteModal } from './components/ConfirmDeleteModal';
 import { PullToRefresh } from './components/PullToRefresh';
-import { LayoutDashboard, Settings, UserPlus, LogOut } from 'lucide-react';
+import { Home, Settings } from 'lucide-react';
 
 export default function App() {
-  // Core states
+  // Core Operational States
   const [categories, setCategories] = useState<UpdateCategory[]>(() => loadCategories());
   const [users, setUsers] = useState<User[]>(() => loadUsers());
   const [currentUser, setCurrentUser] = useState<User | null>(() => loadSession());
   const [invites, setInvites] = useState<InviteLink[]>(() => loadInvites());
 
-  // Navigation tab: 'dashboard' | 'settings'
+  // Navigation tab: 'dashboard' (Beranda) | 'settings' (Pengaturan)
   const [activeNav, setActiveNav] = useState<'dashboard' | 'settings'>('dashboard');
+  const [isOpenMobileSidebar, setIsOpenMobileSidebar] = useState(false);
 
-  // View state within dashboard: 'overview' (token__91aaac5f.jpeg) or 'detail' (token_2_624887c0.jpeg)
+  // View state within site monitoring: 'overview' or 'detail'
   const [viewMode, setViewMode] = useState<'overview' | 'detail'>('overview');
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>(() => {
     const cats = loadCategories();
@@ -61,7 +70,7 @@ export default function App() {
   const [showAddSiteModal, setShowAddSiteModal] = useState(false);
   const [showAddCategoryModal, setShowAddCategoryModal] = useState(false);
 
-  // Edit Category state (for title & period modal)
+  // Edit Category state
   const [editingCategory, setEditingCategory] = useState<UpdateCategory | null>(null);
 
   // Site Actions
@@ -91,7 +100,7 @@ export default function App() {
     }
   }, []);
 
-  // Save changes to localStorage whenever categories change
+  // Sync state changes with persistence
   useEffect(() => {
     saveCategories(categories);
   }, [categories]);
@@ -104,66 +113,243 @@ export default function App() {
     saveInvites(invites);
   }, [invites]);
 
-  const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3000);
+  const showToast = (message: string) => {
+    setToastMessage(message);
+    setTimeout(() => {
+      setToastMessage(null);
+    }, 3000);
   };
 
-  const currentCategory =
-    categories.find((c) => c.id === selectedCategoryId) || categories[0];
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await new Promise((r) => setTimeout(r, 600));
+    setCategories(loadCategories());
+    setUsers(loadUsers());
+    setIsRefreshing(false);
+    showToast('Data berhasil diperbarui');
+  };
 
-  const isAdmin = currentUser?.role === 'admin';
+  // Find currently open category
+  const currentCategory = categories.find((c) => c.id === selectedCategoryId) || categories[0];
 
-  // Navigation handlers
+  // User Authentication Handlers
+  const handleSelectUser = (user: User) => {
+    setCurrentUser(user);
+    saveSession(user);
+    showToast(`Masuk sebagai ${user.name}`);
+  };
+
+  const handleRegisterFromInvite = (name: string, role: UserRole, inviteCode?: string) => {
+    const newUser: User = {
+      id: `usr-${Date.now()}`,
+      name,
+      role,
+      avatar: '/logo.png',
+      status: 'active',
+      isOnline: true,
+      lastSeen: new Date().toISOString(),
+    };
+
+    const updatedUsers = [...users, newUser];
+    setUsers(updatedUsers);
+    saveUsers(updatedUsers);
+
+    if (inviteCode) {
+      const updatedInvites = invites.map((inv) => {
+        if (inv.code === inviteCode) {
+          const used = inv.usedBy || [];
+          return { ...inv, usedBy: [...used, newUser.name] };
+        }
+        return inv;
+      });
+      setInvites(updatedInvites);
+    }
+
+    setCurrentUser(newUser);
+    saveSession(newUser);
+    setInviteCodeFromUrl(null);
+
+    // Clean up url param
+    if (window.history.replaceState) {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('invite');
+      window.history.replaceState({}, document.title, url.toString());
+    }
+
+    showToast(`Selamat datang, ${newUser.name}!`);
+  };
+
+  const handleLogout = (forgetDevice = false) => {
+    clearSession();
+    setCurrentUser(null);
+    setShowAccountSettings(false);
+    if (forgetDevice) {
+      showToast('Berhasil keluar dan data perangkat dibersihkan');
+    } else {
+      showToast('Berhasil keluar');
+    }
+  };
+
+  // Category & Site Navigation
   const handleOpenCategory = (categoryId: string) => {
     setSelectedCategoryId(categoryId);
     setViewMode('detail');
-    setActiveNav('dashboard');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleBackToOverview = () => {
     setViewMode('overview');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // Site check toggle (Diizinkan untuk Petugas & Admin)
+  // Site Check/Uncheck action
   const handleToggleCheck = (siteId: string) => {
     setCategories((prevCategories) =>
       prevCategories.map((cat) => {
         if (cat.id !== selectedCategoryId) return cat;
+
+        const updatedSites = cat.sites.map((site) => {
+          if (site.id !== siteId) return site;
+          const nextChecked = !site.checked;
+          return {
+            ...site,
+            checked: nextChecked,
+            updatedAt: new Date().toISOString(),
+            updatedBy: currentUser?.name || 'Petugas',
+          };
+        });
+
         return {
           ...cat,
-          sites: cat.sites.map((site) => {
-            if (site.id !== siteId) return site;
-            return {
-              ...site,
-              checked: !site.checked,
-              updatedAt: new Date().toISOString(),
-              updatedBy: currentUser?.name || 'Petugas',
-            };
-          }),
+          sites: updatedSites,
         };
       })
     );
   };
 
-  // Edit site (Khusus Admin)
-  const handleEditSite = (site: SiteItem) => {
-    if (!isAdmin) {
-      showToast('Akses ditolak: Hanya Admin yang dapat mengedit data site.');
-      return;
+  // Token Management
+  const handleAddToken = (siteId: string, token: string) => {
+    setCategories((prevCategories) =>
+      prevCategories.map((cat) => {
+        if (cat.id !== selectedCategoryId) return cat;
+
+        const updatedSites = cat.sites.map((site) => {
+          if (site.id !== siteId) return site;
+          const currentTokens = site.tokens || [];
+          return {
+            ...site,
+            tokens: [...currentTokens, token],
+            updatedAt: new Date().toISOString(),
+            updatedBy: currentUser?.name || 'Petugas',
+          };
+        });
+
+        return {
+          ...cat,
+          sites: updatedSites,
+        };
+      })
+    );
+    showToast(`Token listrik berhasil ditambahkan`);
+  };
+
+  const handleRemoveToken = (siteId: string, tokenIndex: number) => {
+    setCategories((prevCategories) =>
+      prevCategories.map((cat) => {
+        if (cat.id !== selectedCategoryId) return cat;
+
+        const updatedSites = cat.sites.map((site) => {
+          if (site.id !== siteId) return site;
+          const currentTokens = site.tokens || [];
+          return {
+            ...site,
+            tokens: currentTokens.filter((_, idx) => idx !== tokenIndex),
+            updatedAt: new Date().toISOString(),
+            updatedBy: currentUser?.name || 'Petugas',
+          };
+        });
+
+        return {
+          ...cat,
+          sites: updatedSites,
+        };
+      })
+    );
+  };
+
+  // Photo Watermarking & IndexedDB Storage
+  const handleSavePhoto = async (siteId: string, photo: PhotoRecord) => {
+    try {
+      await savePhotoToDB(photo);
+
+      setCategories((prevCategories) =>
+        prevCategories.map((cat) => {
+          if (cat.id !== selectedCategoryId) return cat;
+
+          const updatedSites = cat.sites.map((site) => {
+            if (site.id !== siteId) return site;
+            const existingPhotos = site.photos || [];
+            return {
+              ...site,
+              photos: [...existingPhotos, photo],
+              updatedAt: new Date().toISOString(),
+              updatedBy: currentUser?.name || 'Petugas',
+            };
+          });
+
+          return {
+            ...cat,
+            sites: updatedSites,
+          };
+        })
+      );
+
+      setCameraSite(null);
+      showToast('Foto dokumentasi tersimpan dengan watermark GPS');
+    } catch (err) {
+      console.error('Failed to save photo record:', err);
+      showToast('Gagal menyimpan foto dokumentasi');
     }
+  };
+
+  const handleDeletePhoto = async (photoId: string) => {
+    try {
+      await deletePhotoFromDB(photoId);
+
+      setCategories((prevCategories) =>
+        prevCategories.map((cat) => {
+          if (cat.id !== selectedCategoryId) return cat;
+
+          const updatedSites = cat.sites.map((site) => {
+            if (!site.photos) return site;
+            return {
+              ...site,
+              photos: site.photos.filter((p) => p.id !== photoId),
+            };
+          });
+
+          return {
+            ...cat,
+            sites: updatedSites,
+          };
+        })
+      );
+
+      setViewingPhoto(null);
+      showToast('Foto berhasil dihapus');
+    } catch (err) {
+      console.error('Failed to delete photo:', err);
+      showToast('Gagal menghapus foto');
+    }
+  };
+
+  // Site Edit & Add
+  const handleEditSite = (site: SiteItem) => {
     setEditingSite(site);
   };
 
   const handleSaveEditedSite = (updatedSite: SiteItem) => {
-    if (!isAdmin) {
-      showToast('Akses ditolak: Hanya Admin yang dapat menyimpan perubahan site.');
-      return;
-    }
-    setCategories((prevCategories) =>
-      prevCategories.map((cat) => {
+    setCategories((prev) =>
+      prev.map((cat) => {
         if (cat.id !== selectedCategoryId) return cat;
         return {
           ...cat,
@@ -171,39 +357,104 @@ export default function App() {
         };
       })
     );
-    showToast(`Data Site ${updatedSite.siteId} berhasil disimpan.`);
+    setEditingSite(null);
+    showToast(`Data site ${updatedSite.siteId} berhasil diperbarui`);
   };
 
-  // Delete site (Khusus Admin)
-  const handleDeleteSite = (siteId: string) => {
-    if (!isAdmin) {
-      showToast('Akses ditolak: Hanya Admin yang dapat menghapus site.');
-      return;
-    }
-    const site =
-      currentCategory?.sites.find((s) => s.id === siteId) ||
-      categories.flatMap((c) => c.sites).find((s) => s.id === siteId);
-    if (!site) return;
+  const handleAddSite = (siteData: { meterId: string; siteId: string; siteName: string }) => {
+    const newSite: SiteItem = {
+      id: `site-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      meterId: siteData.meterId,
+      siteId: siteData.siteId,
+      siteName: siteData.siteName,
+      checked: false,
+      tokens: [],
+      photos: [],
+      updatedAt: new Date().toISOString(),
+      updatedBy: currentUser?.name || 'Petugas',
+    };
 
+    setCategories((prev) =>
+      prev.map((cat) => {
+        if (cat.id !== selectedCategoryId) return cat;
+        return {
+          ...cat,
+          sites: [...cat.sites, newSite],
+        };
+      })
+    );
+
+    setShowAddSiteModal(false);
+    showToast(`Site ${newSite.siteId} berhasil ditambahkan ke daftar`);
+  };
+
+  const handleDeleteSite = (siteId: string) => {
+    const siteToDelete = currentCategory?.sites.find((s) => s.id === siteId);
+    if (!siteToDelete) return;
     setDeleteModalState({
       type: 'site',
-      site,
+      site: siteToDelete,
+    });
+  };
+
+  const handleEditCategory = (cat: UpdateCategory) => {
+    setEditingCategory(cat);
+  };
+
+  const handleUpdateSiteCount = (categoryId: string, newTotal: number) => {
+    setCategories((prev) =>
+      prev.map((cat) => {
+        if (cat.id !== categoryId) return cat;
+        const currentCount = cat.sites.length;
+        if (newTotal === currentCount) return cat;
+
+        if (newTotal < currentCount) {
+          return {
+            ...cat,
+            sites: cat.sites.slice(0, newTotal),
+          };
+        } else {
+          const additionalCount = newTotal - currentCount;
+          const additionalSites: SiteItem[] = Array.from({ length: additionalCount }).map(
+            (_, idx) => {
+              const num = currentCount + idx + 1;
+              return {
+                id: `site-exp-${Date.now()}-${num}`,
+                meterId: (538720000000 + num * 97).toString(),
+                siteId: `EXP${num.toString().padStart(3, '0')}`,
+                siteName: `Site Tambahan ${num}`,
+                checked: false,
+                tokens: [],
+                photos: [],
+              };
+            }
+          );
+          return {
+            ...cat,
+            sites: [...cat.sites, additionalSites as unknown as SiteItem],
+          };
+        }
+      })
+    );
+    showToast(`Total site berhasil disesuaikan menjadi ${newTotal}`);
+  };
+
+  const handleDeleteCategory = (categoryId: string) => {
+    const catToDelete = categories.find((c) => c.id === categoryId);
+    if (!catToDelete) return;
+    setDeleteModalState({
+      type: 'category',
+      category: catToDelete,
     });
   };
 
   const handleConfirmDelete = () => {
     if (!deleteModalState) return;
-    if (!isAdmin) {
-      showToast('Akses ditolak: Hanya Admin yang berwenang menghapus data.');
-      setDeleteModalState(null);
-      return;
-    }
 
     if (deleteModalState.type === 'site' && deleteModalState.site) {
       const siteId = deleteModalState.site.id;
-      const siteDisplay = deleteModalState.site.siteId || deleteModalState.site.siteName;
-      setCategories((prevCategories) =>
-        prevCategories.map((cat) => {
+      setCategories((prev) =>
+        prev.map((cat) => {
           if (cat.id !== selectedCategoryId) return cat;
           return {
             ...cat,
@@ -211,395 +462,139 @@ export default function App() {
           };
         })
       );
-      showToast(`Site ${siteDisplay} berhasil dihapus dari daftar.`);
+      showToast(`Site ${deleteModalState.site.siteId} dihapus`);
     } else if (deleteModalState.type === 'category' && deleteModalState.category) {
       const catId = deleteModalState.category.id;
-      const catTitle = deleteModalState.category.title;
-      setCategories((prev) => prev.filter((c) => c.id !== catId));
-      if (selectedCategoryId === catId) {
-        setSelectedCategoryId(categories.filter((c) => c.id !== catId)[0]?.id || '');
-      }
-      showToast(`Kategori "${catTitle}" berhasil dihapus.`);
+      setCategories((prev) => {
+        const remaining = prev.filter((c) => c.id !== catId);
+        if (selectedCategoryId === catId && remaining.length > 0) {
+          setSelectedCategoryId(remaining[0].id);
+        }
+        return remaining;
+      });
+      showToast(`Kategori "${deleteModalState.category.title}" dihapus`);
     }
 
     setDeleteModalState(null);
   };
 
-  // Add site (Khusus Admin)
-  const handleAddSite = (newSiteData: Omit<SiteItem, 'id'>) => {
-    if (!isAdmin) {
-      showToast('Akses ditolak: Hanya Admin yang dapat menambah site.');
-      return;
-    }
-    const newSite: SiteItem = {
-      ...newSiteData,
-      id: `site-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-      updatedAt: new Date().toISOString(),
-      updatedBy: currentUser?.name || 'Petugas',
-    };
-
-    setCategories((prevCategories) =>
-      prevCategories.map((cat) => {
-        if (cat.id !== selectedCategoryId) return cat;
-        return {
-          ...cat,
-          sites: [newSite, ...cat.sites],
-        };
-      })
-    );
-    showToast(`Site ${newSite.siteId} berhasil ditambahkan!`);
+  // User Management
+  const handleAddUser = (newUser: User) => {
+    setUsers((prev) => [...prev, newUser]);
+    showToast(`Pengguna ${newUser.name} berhasil ditambahkan`);
   };
 
-  // Token input with Return (Khusus Admin)
-  const handleAddToken = (siteId: string, token: string) => {
-    if (!isAdmin) {
-      showToast('Akses ditolak: Hanya Admin yang dapat menambah token.');
-      return;
+  const handleUpdateUser = (updated: User) => {
+    setUsers((prev) => prev.map((u) => (u.id === updated.id ? updated : u)));
+    if (currentUser?.id === updated.id) {
+      setCurrentUser(updated);
+      saveSession(updated);
     }
-    setCategories((prevCategories) =>
-      prevCategories.map((cat) => {
-        if (cat.id !== selectedCategoryId) return cat;
-        return {
-          ...cat,
-          sites: cat.sites.map((site) => {
-            if (site.id !== siteId) return site;
-            const existingTokens = site.tokens || [];
-            return {
-              ...site,
-              tokens: [...existingTokens, token],
-              updatedAt: new Date().toISOString(),
-              updatedBy: currentUser?.name || 'Petugas',
-            };
-          }),
-        };
-      })
-    );
-    showToast(`Nomor token ${token} ditambahkan.`);
+    showToast(`Data ${updated.name} diperbarui`);
   };
 
-  const handleRemoveToken = (siteId: string, tokenIndex: number) => {
-    if (!isAdmin) {
-      showToast('Akses ditolak: Hanya Admin yang dapat menghapus token.');
+  const handleDeleteUser = (userId: string) => {
+    if (userId === currentUser?.id) {
+      showToast('Tidak dapat menghapus akun Anda sendiri');
       return;
     }
-    setCategories((prevCategories) =>
-      prevCategories.map((cat) => {
-        if (cat.id !== selectedCategoryId) return cat;
-        return {
-          ...cat,
-          sites: cat.sites.map((site) => {
-            if (site.id !== siteId) return site;
-            const updatedTokens = (site.tokens || []).filter((_, i) => i !== tokenIndex);
-            return {
-              ...site,
-              tokens: updatedTokens,
-              updatedAt: new Date().toISOString(),
-            };
-          }),
-        };
-      })
-    );
-    showToast('Nomor token dihapus.');
-  };
-
-  // Photos (Khusus Admin)
-  const handleSavePhoto = async (siteId: string, photo: PhotoRecord) => {
-    if (!isAdmin) {
-      showToast('Akses ditolak: Hanya Admin yang dapat menyimpan foto.');
-      return;
-    }
-    await savePhotoToDB(photo);
-
-    setCategories((prevCategories) =>
-      prevCategories.map((cat) => {
-        if (cat.id !== selectedCategoryId) return cat;
-        return {
-          ...cat,
-          sites: cat.sites.map((site) => {
-            if (site.id !== siteId) return site;
-            return {
-              ...site,
-              photos: [photo, ...(site.photos || [])],
-              updatedAt: new Date().toISOString(),
-              updatedBy: currentUser?.name || 'Petugas',
-            };
-          }),
-        };
-      })
-    );
-    showToast('Foto KWh meter ber-watermark berhasil disimpan.');
-  };
-
-  const handleDeletePhoto = async (siteId: string, photoId: string) => {
-    if (!isAdmin) {
-      showToast('Akses ditolak: Hanya Admin yang dapat menghapus foto.');
-      return;
-    }
-    await deletePhotoFromDB(photoId);
-
-    setCategories((prevCategories) =>
-      prevCategories.map((cat) => {
-        if (cat.id !== selectedCategoryId) return cat;
-        return {
-          ...cat,
-          sites: cat.sites.map((site) => {
-            if (site.id !== siteId) return site;
-            return {
-              ...site,
-              photos: (site.photos || []).filter((p) => p.id !== photoId),
-            };
-          }),
-        };
-      })
-    );
-    showToast('Foto dokumentasi telah dihapus.');
-  };
-
-  // Category title & period editing (Khusus Admin)
-  const handleEditCategory = (cat: UpdateCategory) => {
-    if (!isAdmin) {
-      showToast('Akses ditolak: Hanya Admin yang dapat mengedit kategori.');
-      return;
-    }
-    setEditingCategory(cat);
-  };
-
-  const handleSaveCategoryChanges = (newTitle: string, newPeriod: string) => {
-    if (!isAdmin) {
-      showToast('Akses ditolak: Hanya Admin yang dapat menyimpan perubahan kategori.');
-      return;
-    }
-    if (!editingCategory) return;
-    setCategories((prev) =>
-      prev.map((c) =>
-        c.id === editingCategory.id ? { ...c, title: newTitle, period: newPeriod } : c
-      )
-    );
-    setEditingCategory(null);
-    showToast('Kategori berhasil diperbarui.');
-  };
-
-  const handleDeleteCategory = (catId: string) => {
-    if (!isAdmin) {
-      showToast('Akses ditolak: Hanya Admin yang dapat menghapus kategori.');
-      return;
-    }
-    const cat = categories.find((c) => c.id === catId);
-    if (!cat) return;
-    if (categories.length <= 1) {
-      showToast('Minimal harus ada 1 kategori update aktif.');
-      return;
-    }
-    setDeleteModalState({
-      type: 'category',
-      category: cat,
-    });
-  };
-
-  // Quick edit total site count in monitoring menu (Khusus Admin)
-  const handleUpdateSiteCount = (catId: string, newTotal: number) => {
-    if (!isAdmin) {
-      showToast('Akses ditolak: Hanya Admin yang dapat mengubah jumlah site.');
-      return;
-    }
-    setCategories((prev) =>
-      prev.map((c) => {
-        if (c.id !== catId) return c;
-        const currentCount = c.sites.length;
-        if (newTotal === currentCount) return c;
-
-        if (newTotal < currentCount) {
-          return { ...c, sites: c.sites.slice(0, newTotal) };
-        } else {
-          const extra: SiteItem[] = [];
-          for (let i = currentCount + 1; i <= newTotal; i++) {
-            extra.push({
-              id: `site-${Date.now()}-${i}`,
-              meterId: `54000000000${i}`,
-              siteId: `SITE${i}`,
-              siteName: `SITE_TAMBAHAN_${i}`,
-              checked: false,
-              tokens: [],
-              photos: [],
-            });
-          }
-          return { ...c, sites: [...c.sites, ...extra] };
-        }
-      })
-    );
-    showToast(`Jumlah site kategori diperbarui menjadi ${newTotal} site.`);
-  };
-
-  const handleAddNewCategory = (newCat: UpdateCategory) => {
-    if (!isAdmin) {
-      showToast('Akses ditolak: Hanya Admin yang dapat membuat kategori baru.');
-      return;
-    }
-    setCategories((prev) => [...prev, newCat]);
-    setSelectedCategoryId(newCat.id);
-    setViewMode('detail');
-    setActiveNav('dashboard');
-    showToast(`Kategori "${newCat.title}" berhasil dibuat!`);
-  };
-
-  // Reset demo data (Khusus Admin)
-  const handleResetData = () => {
-    if (!isAdmin) {
-      showToast('Akses ditolak: Hanya Admin yang dapat mengatur ulang data.');
-      return;
-    }
-    saveCategories(INITIAL_CATEGORIES);
-    saveUsers(INITIAL_USERS);
-    setCategories(INITIAL_CATEGORIES);
-    setUsers(INITIAL_USERS);
-    setSelectedCategoryId(INITIAL_CATEGORIES[0].id);
-    setViewMode('overview');
-    setActiveNav('dashboard');
-    showToast('Data aplikasi telah dikembalikan ke kondisi awal.');
-  };
-
-  // User Management (Khusus Admin)
-  const handleAddUser = (userData: Partial<User>) => {
-    if (!isAdmin) {
-      showToast('Akses ditolak: Hanya Admin yang dapat mendaftarkan pengguna baru.');
-      return;
-    }
-    const newUser: User = {
-      id: `user-${Date.now()}`,
-      name: userData.name || 'Anggota Tim',
-      email: userData.email,
-      role: userData.role || 'user',
-      avatar: '/logo.png',
-      status: 'active',
-      isOnline: false,
-      lastSeen: 'Baru ditambahkan',
-    };
-    setUsers((prev) => [newUser, ...prev]);
-    showToast(`Anggota ${newUser.name} berhasil didaftarkan!`);
-  };
-
-  const handleUpdateUser = (updatedUser: User) => {
-    if (!isAdmin && currentUser?.id !== updatedUser.id) {
-      showToast('Akses ditolak: Hanya Admin yang dapat mengubah data anggota lain.');
-      return;
-    }
-    setUsers((prev) => prev.map((u) => (u.id === updatedUser.id ? updatedUser : u)));
-    if (currentUser?.id === updatedUser.id) {
-      setCurrentUser(updatedUser);
-      saveSession(updatedUser);
-    }
-    showToast(`Data anggota ${updatedUser.name} berhasil diperbarui.`);
-  };
-
-  const handleDeleteUser = (userId: string, permanent: boolean) => {
-    if (!isAdmin) {
-      showToast('Akses ditolak: Hanya Admin yang dapat menghapus anggota.');
-      return;
-    }
-    if (permanent) {
-      setUsers((prev) => prev.filter((u) => u.id !== userId));
-      showToast('Anggota telah dihapus permanen.');
-    } else {
-      setUsers((prev) =>
-        prev.map((u) => (u.id === userId ? { ...u, status: 'inactive' } : u))
-      );
-      showToast('Anggota dinonaktifkan.');
-    }
+    setUsers((prev) => prev.filter((u) => u.id !== userId));
+    showToast('Pengguna telah dihapus');
   };
 
   const handleCreateInvite = (role: UserRole): InviteLink => {
-    if (!isAdmin) {
-      showToast('Akses ditolak: Hanya Admin yang dapat membuat link undangan.');
-      throw new Error('Akses ditolak: Hanya Admin yang dapat membuat link undangan.');
-    }
-    const code = `DEPOTEL-${role.toUpperCase()}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
     const newInvite: InviteLink = {
       id: `inv-${Date.now()}`,
-      code,
-      role,
+      code: Math.random().toString(36).substring(2, 8).toUpperCase(),
       createdAt: new Date().toISOString(),
-      expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 30).toISOString(),
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
       createdBy: currentUser?.name || 'Admin',
+      role,
+      usedBy: [],
       active: true,
     };
     setInvites((prev) => [newInvite, ...prev]);
+    showToast(`Tautan undangan kode ${newInvite.code} berhasil dibuat`);
     return newInvite;
   };
 
-  // Auth
-  const handleLogin = (userToLogin: User) => {
-    const onlineUser = { ...userToLogin, isOnline: true, lastSeen: 'Baru saja' };
-    setCurrentUser(onlineUser);
-    saveSession(onlineUser);
-    setUsers((prev) => prev.map((u) => (u.id === onlineUser.id ? onlineUser : u)));
-    showToast(`Selamat datang, ${onlineUser.name}!`);
+  // Reset to initial demo data
+  const handleResetData = () => {
+    setCategories(INITIAL_CATEGORIES);
+    saveCategories(INITIAL_CATEGORIES);
+    setUsers(INITIAL_USERS);
+    saveUsers(INITIAL_USERS);
+    showToast('Seluruh data berhasil dikembalikan ke standar awal');
   };
 
-  const handleGoogleSignIn = () => {
-    const adminUser = users.find((u) => u.email === 'updatetokendanswacam@gmail.com') || users[0];
-    handleLogin(adminUser);
-  };
-
-  const handleLogout = (forgetDevice: boolean = false) => {
-    if (currentUser) {
-      const offlineUser = { ...currentUser, isOnline: false, lastSeen: 'Baru saja' };
-      setUsers((prev) => prev.map((u) => (u.id === offlineUser.id ? offlineUser : u)));
-    }
-    clearSession(forgetDevice);
-    setCurrentUser(null);
-    setShowAccountSettings(false);
-    showToast(forgetDevice ? 'Akun telah dihapus dari HP ini.' : 'Sesi berhasil diakhiri.');
-  };
-
-  const handleRefresh = async () => {
-    setIsRefreshing(true);
-    const loadedCats = loadCategories();
-    const loadedUs = loadUsers();
-    setCategories(loadedCats);
-    setUsers(loadedUs);
-    await new Promise((res) => setTimeout(res, 500));
-    setIsRefreshing(false);
-    showToast('Data aplikasi berhasil disegarkan.');
-  };
-
-  // Login view if no user
+  // If user is not logged in, show Login / User selector
   if (!currentUser) {
     return (
       <LoginModal
         users={users}
         inviteCode={inviteCodeFromUrl}
-        onLogin={handleLogin}
-        onGoogleSignIn={handleGoogleSignIn}
+        onLogin={handleSelectUser}
+        onGoogleSignIn={() => {
+          const firstAdmin = users.find((u) => u.role === 'admin') || users[0];
+          if (firstAdmin) handleSelectUser(firstAdmin);
+        }}
       />
     );
   }
 
   return (
     <PullToRefresh onRefresh={handleRefresh}>
-      <div className="min-h-screen bg-[#f8f9fc] text-slate-800 flex flex-col font-sans selection:bg-[#1e2238] selection:text-white pb-16 sm:pb-0">
+      <div className="min-h-screen flex bg-[#f4f6fa] text-slate-800 antialiased selection:bg-blue-600 selection:text-white">
+        {/* Offline indicator bar */}
         <OfflineBanner />
 
-        {/* Top Navbar */}
-        <Header
+        {/* Desktop Sidebar with Beranda & Pengaturan placed vertically at the bottom footer */}
+        <Sidebar
           currentUser={currentUser}
           activeNav={activeNav}
-          onSelectNav={setActiveNav}
-          onOpenUserManagement={() => setShowUserManagement(true)}
-          onOpenInviteModal={() => setShowInviteModal(true)}
-          onOpenLogoutModal={() => setShowAccountSettings(true)}
-          onRefresh={handleRefresh}
-          isRefreshing={isRefreshing}
+          onSelectNav={(nav) => {
+            setActiveNav(nav);
+            if (nav === 'dashboard') {
+              setViewMode('overview');
+            }
+          }}
+          categories={categories}
+          selectedCategoryId={selectedCategoryId}
+          onSelectCategory={(catId) => {
+            setSelectedCategoryId(catId);
+            setViewMode('detail');
+          }}
+          isOpenMobile={isOpenMobileSidebar}
+          onCloseMobile={() => setIsOpenMobileSidebar(false)}
         />
 
-        {/* Main Content Area */}
-        <main className="flex-1 max-w-5xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
-          {activeNav === 'dashboard' ? (
-            <>
-              {/* Status Tim Terdaftar (Read-only banner on dashboard) */}
-              <TeamStatusRoster users={users} />
+        {/* Right Content Area with responsive offset for Sidebar */}
+        <div className="flex-1 flex flex-col min-w-0 lg:pl-64 xl:pl-72">
+          {/* Top Header (Dashboard & Pengaturan removed from top center per instructions) */}
+          <Header
+            currentUser={currentUser}
+            onOpenUserManagement={() => setShowUserManagement(true)}
+            onOpenInviteModal={() => setShowInviteModal(true)}
+            onOpenLogoutModal={() => setShowAccountSettings(true)}
+            onToggleMobileSidebar={() => setIsOpenMobileSidebar(true)}
+            onRefresh={handleRefresh}
+            onSelectNav={(nav) => {
+              setActiveNav(nav);
+              if (nav === 'dashboard') {
+                setViewMode('overview');
+              }
+            }}
+            isRefreshing={isRefreshing}
+          />
 
-              {/* Conditional View: Overview (Image 1) or Category Detail (Image 2) */}
-              {viewMode === 'overview' ? (
+          {/* Main Content Area: pb-24 on mobile ensures footer bottom navigation never covers content */}
+          <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6 pb-24 lg:pb-12">
+            {/* Status Tim Terdaftar (Live Roster) */}
+            <TeamStatusRoster users={users} />
+
+            {/* Conditional rendering between Beranda (Dashboard) and Pengaturan (Settings) */}
+            {activeNav === 'dashboard' ? (
+              viewMode === 'overview' ? (
                 <DashboardOverview
                   categories={categories}
                   currentUser={currentUser}
@@ -610,123 +605,97 @@ export default function App() {
                   onDeleteCategory={handleDeleteCategory}
                   onUpdateSiteCount={handleUpdateSiteCount}
                 />
-              ) : (
-                currentCategory && (
-                  <CategoryDetailView
-                    category={currentCategory}
-                    currentUser={currentUser}
-                    onBackToOverview={handleBackToOverview}
-                    onOpenWhatsApp={() => setShowWhatsAppModal(true)}
-                    onEditCategoryTitle={() => handleEditCategory(currentCategory)}
-                    onAddNewSite={() => setShowAddSiteModal(true)}
-                    onToggleCheck={handleToggleCheck}
-                    onEditSite={handleEditSite}
-                    onDeleteSite={handleDeleteSite}
-                    onAddToken={handleAddToken}
-                    onRemoveToken={handleRemoveToken}
-                    onOpenCamera={(s) => setCameraSite(s)}
-                    onViewPhoto={(s, idx) => setViewingPhoto({ site: s, index: idx })}
-                  />
-                )
-              )}
-            </>
-          ) : (
-            /* Settings View (Pengaturan Aplikasi & Akun) */
-            <SettingsView
-              currentUser={currentUser}
-              users={users}
-              categories={categories}
-              invites={invites}
-              onUpdateProfile={(updated) => {
-                const u = { ...currentUser, ...updated };
-                setCurrentUser(u);
-                saveSession(u);
-                setUsers((prev) => prev.map((x) => (x.id === u.id ? u : x)));
-              }}
-              onOpenUserManagement={() => setShowUserManagement(true)}
-              onOpenInviteModal={() => setShowInviteModal(true)}
-              onOpenExportModal={() => setShowExportModal(true)}
-              onOpenAddCategoryModal={() => setShowAddCategoryModal(true)}
-              onLogout={handleLogout}
-              onResetData={handleResetData}
-              onRefresh={handleRefresh}
-              onSwitchUser={(targetUser) => {
-                handleLogin(targetUser);
-              }}
-              isRefreshing={isRefreshing}
-            />
-          )}
-        </main>
+              ) : currentCategory ? (
+                <CategoryDetailView
+                  category={currentCategory}
+                  currentUser={currentUser}
+                  onBackToOverview={handleBackToOverview}
+                  onOpenWhatsApp={() => setShowWhatsAppModal(true)}
+                  onEditCategoryTitle={() => handleEditCategory(currentCategory)}
+                  onAddNewSite={() => setShowAddSiteModal(true)}
+                  onToggleCheck={handleToggleCheck}
+                  onEditSite={handleEditSite}
+                  onDeleteSite={handleDeleteSite}
+                  onAddToken={handleAddToken}
+                  onRemoveToken={handleRemoveToken}
+                  onOpenCamera={(s) => setCameraSite(s)}
+                  onViewPhoto={(s, idx) => setViewingPhoto({ site: s, index: idx })}
+                />
+              ) : null
+            ) : (
+              <SettingsView
+                currentUser={currentUser}
+                users={users}
+                categories={categories}
+                invites={invites}
+                onUpdateProfile={(updated) => {
+                  const u = { ...currentUser, ...updated };
+                  setCurrentUser(u);
+                  saveSession(u);
+                  setUsers((prev) => prev.map((x) => (x.id === u.id ? u : x)));
+                }}
+                onOpenUserManagement={() => setShowUserManagement(true)}
+                onOpenInviteModal={() => setShowInviteModal(true)}
+                onOpenExportModal={() => setShowExportModal(true)}
+                onOpenAddCategoryModal={() => setShowAddCategoryModal(true)}
+                onLogout={handleLogout}
+                onResetData={handleResetData}
+                onRefresh={handleRefresh}
+                onSwitchUser={handleSelectUser}
+                isRefreshing={isRefreshing}
+              />
+            )}
+          </main>
 
-        {/* Toast Message */}
+          {/* Desktop Footer */}
+          <footer className="mt-auto py-6 border-t border-slate-200 text-center text-xs text-slate-400">
+            <p>© 2026 DEPOTEL GROUP · MONITORING · Checklist & Token Listrik Site Monitoring System</p>
+          </footer>
+        </div>
+
+        {/* ======================================================== */}
+        {/* MOBILE FOOTER NAVIGATION BAR: BERANDA & PENGATURAN */}
+        {/* ======================================================== */}
+        <nav className="lg:hidden fixed bottom-0 inset-x-0 bg-[#141726]/95 backdrop-blur-md border-t border-slate-800 z-40 px-6 py-2 flex items-center justify-around shadow-2xl">
+          {/* 1. Beranda (Home Icon) */}
+          <button
+            onClick={() => {
+              setActiveNav('dashboard');
+              setViewMode('overview');
+            }}
+            className={`flex flex-col items-center gap-1 text-[11px] font-bold transition cursor-pointer select-none py-1.5 px-6 rounded-2xl ${
+              activeNav === 'dashboard'
+                ? 'text-white bg-blue-600 shadow-md shadow-blue-900/50'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <Home className="w-5 h-5" />
+            <span>Beranda</span>
+          </button>
+
+          {/* 2. Pengaturan (Settings Icon) */}
+          <button
+            onClick={() => {
+              setActiveNav('settings');
+            }}
+            className={`flex flex-col items-center gap-1 text-[11px] font-bold transition cursor-pointer select-none py-1.5 px-6 rounded-2xl ${
+              activeNav === 'settings'
+                ? 'text-white bg-blue-600 shadow-md shadow-blue-900/50'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <Settings className="w-5 h-5" />
+            <span>Pengaturan</span>
+          </button>
+        </nav>
+
+        {/* Floating Toast Notification */}
         {toastMessage && (
-          <div className="fixed bottom-20 sm:bottom-5 right-5 z-50 bg-[#1e2238] border border-slate-700 text-white px-4 py-2.5 rounded-2xl shadow-xl text-xs sm:text-sm font-semibold flex items-center gap-2 animate-in slide-in-from-bottom-3">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+          <div className="fixed bottom-20 lg:bottom-6 right-6 z-50 bg-[#1e2238] border border-slate-700 text-white px-4 py-3 rounded-2xl shadow-2xl text-xs sm:text-sm font-semibold flex items-center gap-2.5 animate-in slide-in-from-bottom-4">
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping shrink-0" />
             <span>{toastMessage}</span>
           </div>
         )}
-
-        {/* Mobile Sticky Bottom Navigation */}
-        <div className="sm:hidden fixed bottom-0 inset-x-0 bg-white/95 backdrop-blur-md border-t border-slate-200 z-30 px-6 py-2 flex items-center justify-around shadow-lg">
-          <button
-            onClick={() => setActiveNav('dashboard')}
-            className={`flex flex-col items-center gap-1 text-[10px] font-bold transition cursor-pointer ${
-              activeNav === 'dashboard' ? 'text-[#1e2238]' : 'text-slate-400'
-            }`}
-          >
-            <div
-              className={`p-1 rounded-xl transition ${
-                activeNav === 'dashboard' ? 'bg-[#1e2238] text-white' : ''
-              }`}
-            >
-              <LayoutDashboard className="w-4 h-4" />
-            </div>
-            <span>Dashboard</span>
-          </button>
-
-          {isAdmin && (
-            <button
-              onClick={() => setShowInviteModal(true)}
-              className="flex flex-col items-center gap-1 text-[10px] font-bold text-slate-400 hover:text-slate-700 transition cursor-pointer"
-            >
-              <div className="p-1 rounded-xl text-slate-600">
-                <UserPlus className="w-4 h-4" />
-              </div>
-              <span>Undang</span>
-            </button>
-          )}
-
-          <button
-            onClick={() => setActiveNav('settings')}
-            className={`flex flex-col items-center gap-1 text-[10px] font-bold transition cursor-pointer ${
-              activeNav === 'settings' ? 'text-[#1e2238]' : 'text-slate-400'
-            }`}
-          >
-            <div
-              className={`p-1 rounded-xl transition ${
-                activeNav === 'settings' ? 'bg-[#1e2238] text-white' : ''
-              }`}
-            >
-              <Settings className="w-4 h-4" />
-            </div>
-            <span>Pengaturan</span>
-          </button>
-
-          <button
-            onClick={() => setShowAccountSettings(true)}
-            className="flex flex-col items-center gap-1 text-[10px] font-bold text-slate-400 hover:text-red-600 transition cursor-pointer"
-          >
-            <div className="p-1 rounded-xl text-slate-600">
-              <LogOut className="w-4 h-4" />
-            </div>
-            <span>Keluar</span>
-          </button>
-        </div>
-
-        {/* Desktop Footer */}
-        <footer className="mt-auto py-6 border-t border-slate-200/60 text-center text-xs text-slate-400 hidden sm:block">
-          <p>© 2026 DEPOTEL GROUP · MONITORING · Update Cepat, Data Tepat, Layanan Hebat</p>
-        </footer>
 
         {/* Modals & Dialogs */}
         {cameraSite && (
@@ -766,7 +735,11 @@ export default function App() {
         {showAddCategoryModal && (
           <AddCategoryModal
             onClose={() => setShowAddCategoryModal(false)}
-            onAddCategory={handleAddNewCategory}
+            onAddCategory={(cat) => {
+              setCategories((prev) => [...prev, cat]);
+              setShowAddCategoryModal(false);
+              showToast(`Kategori "${cat.title}" berhasil dibuat`);
+            }}
           />
         )}
 
@@ -790,10 +763,37 @@ export default function App() {
             currentUser={currentUser}
             invites={invites}
             onClose={() => setShowUserManagement(false)}
-            onAddUser={handleAddUser}
+            onAddUser={(partialUser) => {
+              const newUser: User = {
+                id: `usr-${Date.now()}`,
+                name: partialUser.name || 'Anggota Baru',
+                email: partialUser.email,
+                role: partialUser.role || 'user',
+                avatar: partialUser.avatar || '/logo.png',
+                status: 'active',
+                isOnline: false,
+              };
+              handleAddUser(newUser);
+            }}
             onUpdateUser={handleUpdateUser}
-            onDeleteUser={handleDeleteUser}
+            onDeleteUser={(userId) => {
+              handleDeleteUser(userId);
+            }}
             onCreateInvite={handleCreateInvite}
+          />
+        )}
+
+        {showAccountSettings && (
+          <AccountSettingsModal
+            currentUser={currentUser}
+            onClose={() => setShowAccountSettings(false)}
+            onLogout={handleLogout}
+            onUpdateProfile={(updated) => {
+              const u = { ...currentUser, ...updated };
+              setCurrentUser(u);
+              saveSession(u);
+              setUsers((prev) => prev.map((x) => (x.id === u.id ? u : x)));
+            }}
           />
         )}
 
@@ -804,84 +804,12 @@ export default function App() {
           />
         )}
 
-        {showAccountSettings && currentUser && (
-          <AccountSettingsModal
-            currentUser={currentUser}
-            onClose={() => setShowAccountSettings(false)}
-            onUpdateProfile={(updated) => {
-              const u = { ...currentUser, ...updated };
-              setCurrentUser(u);
-              saveSession(u);
-              setUsers((prev) => prev.map((x) => (x.id === u.id ? u : x)));
-            }}
-            onLogout={handleLogout}
-          />
-        )}
-
-        {/* Edit Category Title & Period Dialog */}
-        {editingCategory && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in">
-            <div className="w-full max-w-md rounded-3xl bg-white border border-slate-200 p-6 text-slate-800 shadow-2xl">
-              <h3 className="font-bold text-lg text-[#1e2238] mb-1">Edit Kategori Update</h3>
-              <p className="text-xs text-slate-500 mb-4">Ubah nama judul dan periode operasional</p>
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  const form = e.currentTarget;
-                  const title = (form.elements.namedItem('catTitle') as HTMLInputElement).value;
-                  const period = (form.elements.namedItem('catPeriod') as HTMLInputElement).value;
-                  handleSaveCategoryChanges(title, period);
-                }}
-                className="space-y-4"
-              >
-                <div>
-                  <label className="block text-xs font-bold text-slate-600 uppercase mb-1">
-                    Judul Kategori
-                  </label>
-                  <input
-                    name="catTitle"
-                    defaultValue={editingCategory.title}
-                    required
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm focus:outline-none focus:border-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-600 uppercase mb-1">
-                    Periode
-                  </label>
-                  <input
-                    name="catPeriod"
-                    defaultValue={editingCategory.period}
-                    required
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm focus:outline-none focus:border-blue-500"
-                  />
-                </div>
-                <div className="flex justify-end gap-2 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => setEditingCategory(null)}
-                    className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-semibold cursor-pointer"
-                  >
-                    Batal
-                  </button>
-                  <button
-                    type="submit"
-                    className="px-5 py-2 rounded-xl bg-[#1e2238] hover:bg-[#2b304f] text-white text-xs font-bold shadow transition cursor-pointer"
-                  >
-                    Simpan Perubahan
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
-
         {deleteModalState && (
           <ConfirmDeleteModal
             type={deleteModalState.type}
             site={deleteModalState.site}
             category={deleteModalState.category}
-            categoryTitle={currentCategory?.title}
+            categoryTitle={deleteModalState.category?.title}
             onClose={() => setDeleteModalState(null)}
             onConfirm={handleConfirmDelete}
           />

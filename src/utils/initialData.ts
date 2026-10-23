@@ -1,4 +1,14 @@
-import { User, UpdateCategory } from '../types';
+import {
+  User,
+  UpdateCategory,
+  TokenPackage,
+  TokenBalance,
+  TokenTransaction,
+  SwacamConfig,
+  SwacamLog,
+  AppSettings,
+  TokenSystemConfig
+} from '../types';
 
 export const INITIAL_USERS: User[] = [
   {
@@ -282,3 +292,180 @@ export const INITIAL_CATEGORIES: UpdateCategory[] = [
     ]
   }
 ];
+
+export const INITIAL_TOKEN_PACKAGES: TokenPackage[] = [
+  {
+    id: 'pkg-20k',
+    name: 'Paket Pemula (20k)',
+    tokenAmount: 13.5,
+    price: 20000,
+    bonus: 0,
+    description: 'Cocok untuk kebutuhan darurat site monitoring berdaya rendah.'
+  },
+  {
+    id: 'pkg-50k',
+    name: 'Paket Hemat (50k)',
+    tokenAmount: 34.0,
+    price: 50000,
+    bonus: 1.5,
+    description: 'Pilihan standar mingguan untuk site transmisi mikro.'
+  },
+  {
+    id: 'pkg-100k',
+    name: 'Paket Standar (100k)',
+    tokenAmount: 69.5,
+    price: 100000,
+    popular: true,
+    bonus: 3.5,
+    description: 'Paling sering digunakan untuk operasional site bulanan DEPOTEL.'
+  },
+  {
+    id: 'pkg-200k',
+    name: 'Paket Prioritas (200k)',
+    tokenAmount: 142.0,
+    price: 20000,
+    bonus: 8.0,
+    description: 'Direkomendasikan untuk cluster site dengan beban daya tinggi.'
+  },
+  {
+    id: 'pkg-500k',
+    name: 'Paket Cluster (500k)',
+    tokenAmount: 360.0,
+    price: 500000,
+    bonus: 25.0,
+    description: 'Solusi hemat untuk pengisian massal multi-site telekomunikasi.'
+  },
+  {
+    id: 'pkg-1000k',
+    name: 'Paket Enterprise (1 Juta)',
+    tokenAmount: 735.0,
+    price: 1000000,
+    bonus: 60.0,
+    description: 'Kapasitas maksimal untuk cadangan daya site jangka panjang.'
+  }
+];
+
+export const INITIAL_TOKEN_BALANCE: TokenBalance = {
+  currentBalance: 428.5,
+  totalUsed: 1245.8,
+  lowThreshold: 50.0,
+  unit: 'kWh',
+  lastUpdated: new Date().toISOString()
+};
+
+export const INITIAL_TRANSACTIONS: TokenTransaction[] = [
+  {
+    id: 'trx-demo-001',
+    referenceNumber: 'TRX-DPT-202610-8812',
+    packageId: 'pkg-100k',
+    packageName: 'Paket Standar (100k)',
+    tokenAmount: 69.5,
+    price: 100000,
+    paymentMethod: 'QRIS Mandiri/BCA',
+    paymentMethodCode: 'qris',
+    status: 'success',
+    createdAt: new Date(Date.now() - 3600000 * 5).toISOString(),
+    verifiedAt: new Date(Date.now() - 3600000 * 4.9).toISOString(),
+    createdBy: 'Diki Solihin',
+    isDemo: true
+  },
+  {
+    id: 'trx-demo-002',
+    referenceNumber: 'TRX-DPT-202610-7429',
+    packageId: 'pkg-200k',
+    packageName: 'Paket Prioritas (200k)',
+    tokenAmount: 142.0,
+    price: 200000,
+    paymentMethod: 'BCA Virtual Account',
+    paymentMethodCode: 'bca_va',
+    status: 'success',
+    createdAt: new Date(Date.now() - 86400000 * 2).toISOString(),
+    verifiedAt: new Date(Date.now() - 86400000 * 1.95).toISOString(),
+    createdBy: 'Saddam',
+    isDemo: true
+  },
+  {
+    id: 'trx-demo-003',
+    referenceNumber: 'TRX-DPT-202610-6190',
+    packageId: 'pkg-50k',
+    packageName: 'Paket Hemat (50k)',
+    tokenAmount: 34.0,
+    price: 50000,
+    paymentMethod: 'Mandiri Virtual Account',
+    paymentMethodCode: 'mandiri_va',
+    status: 'pending',
+    createdAt: new Date(Date.now() - 1800000).toISOString(),
+    createdBy: 'Diki Solihin',
+    isDemo: true
+  }
+];
+
+export const INITIAL_SWACAM_CONFIG: SwacamConfig = {
+  isConnected: true,
+  connectionStatus: 'connected',
+  apiUrl: 'https://api-gateway.pln.co.id/v1/swacam-meter',
+  apiKeyMasked: 'pln_live_sec_••••••••9841',
+  provider: 'PLN SWACAM Metering Gateway v2.4',
+  syncIntervalMinutes: 30,
+  lastSyncTime: new Date(Date.now() - 1200000).toISOString(),
+  lastSyncStatus: 'success',
+  totalReadings: 324,
+  successRate: 98.4,
+  autoSync: true,
+  allowDisconnect: true
+};
+
+export const INITIAL_SWACAM_LOGS: SwacamLog[] = [
+  {
+    id: 'log-1',
+    timestamp: new Date(Date.now() - 1200000).toISOString(),
+    level: 'success',
+    event: 'Auto-Sync Meter',
+    message: 'Sinkronisasi 22 site KWh meter berhasil diverifikasi oleh server SWACAM.',
+    siteId: 'EPE134'
+  },
+  {
+    id: 'log-2',
+    timestamp: new Date(Date.now() - 3600000 * 3).toISOString(),
+    level: 'info',
+    event: 'API Handshake',
+    message: 'Koneksi ke gateway PLN SWACAM terverifikasi (Latency: 48ms).',
+  },
+  {
+    id: 'log-3',
+    timestamp: new Date(Date.now() - 3600000 * 7).toISOString(),
+    level: 'warning',
+    event: 'Meter Timeout',
+    message: 'ID Pelanggan 547402386338 (JSX867) membutuhkan re-check foto manual.',
+    siteId: 'JSX867'
+  },
+  {
+    id: 'log-4',
+    timestamp: new Date(Date.now() - 86400000).toISOString(),
+    level: 'success',
+    event: 'Batch Upload Meter',
+    message: 'Unggah berkas foto meter dan watermark GPS berhasil diterima.',
+  }
+];
+
+export const INITIAL_APP_SETTINGS: AppSettings = {
+  theme: 'light',
+  language: 'id',
+  notifications: true,
+  emailAlerts: true,
+  soundAlerts: false,
+  tokenLowWarning: true
+};
+
+export const INITIAL_TOKEN_CONFIG: TokenSystemConfig = {
+  provider: 'PLN Prepaid Token Gateway API',
+  endpointUrl: 'https://api-prepaid.pln.co.id/v2/tokens',
+  apiKeyMasked: 'pln_live_token_••••••••7721',
+  tokenVersion: 'KRN 2 (Key Revision Number 2 / 2024-2026)',
+  autoBatchSize: 50,
+  timeoutSeconds: 30,
+  environment: 'demo',
+  lastValidated: new Date(Date.now() - 3600000 * 2).toISOString(),
+  isValidated: true
+};
+

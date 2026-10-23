@@ -1,5 +1,27 @@
-import { User, UpdateCategory, PhotoRecord, InviteLink } from '../types';
-import { INITIAL_USERS, INITIAL_CATEGORIES } from './initialData';
+import {
+  User,
+  UpdateCategory,
+  PhotoRecord,
+  InviteLink,
+  TokenBalance,
+  TokenTransaction,
+  SwacamConfig,
+  SwacamLog,
+  AppSettings,
+  TokenPackage,
+  TokenSystemConfig
+} from '../types';
+import {
+  INITIAL_USERS,
+  INITIAL_CATEGORIES,
+  INITIAL_TOKEN_BALANCE,
+  INITIAL_TRANSACTIONS,
+  INITIAL_SWACAM_CONFIG,
+  INITIAL_SWACAM_LOGS,
+  INITIAL_APP_SETTINGS,
+  INITIAL_TOKEN_PACKAGES,
+  INITIAL_TOKEN_CONFIG
+} from './initialData';
 
 const STORAGE_KEYS = {
   CATEGORIES: 'depotel_categories_v3',
@@ -7,7 +29,13 @@ const STORAGE_KEYS = {
   SESSION: 'depotel_session_v2',
   INVITES: 'depotel_invites_v2',
   PHOTOS: 'depotel_photos_v2',
-  REMEMBERED_ACCOUNT: 'depotel_remembered_account_v1'
+  REMEMBERED_ACCOUNT: 'depotel_remembered_account_v1',
+  TOKEN_BALANCE: 'depotel_token_balance_v1',
+  TRANSACTIONS: 'depotel_transactions_v1',
+  SWACAM_CONFIG: 'depotel_swacam_config_v1',
+  SWACAM_LOGS: 'depotel_swacam_logs_v1',
+  APP_SETTINGS: 'depotel_app_settings_v1',
+  TOKEN_CONFIG: 'depotel_token_config_v1',
 };
 
 // IndexedDB Helper for permanent, unexpired photo storage
@@ -234,3 +262,205 @@ export function saveInvites(invites: InviteLink[]): void {
     console.error('Error saving invites:', e);
   }
 }
+
+// ==========================================
+// TOKEN BALANCE & USAGE PERSISTENCE
+// ==========================================
+export function loadTokenBalance(): TokenBalance {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.TOKEN_BALANCE);
+    if (!raw) {
+      saveTokenBalance(INITIAL_TOKEN_BALANCE);
+      return INITIAL_TOKEN_BALANCE;
+    }
+    return JSON.parse(raw);
+  } catch (e) {
+    console.error('Error loading token balance:', e);
+    return INITIAL_TOKEN_BALANCE;
+  }
+}
+
+export function saveTokenBalance(balance: TokenBalance): void {
+  try {
+    localStorage.setItem(STORAGE_KEYS.TOKEN_BALANCE, JSON.stringify(balance));
+  } catch (e) {
+    console.error('Error saving token balance:', e);
+  }
+}
+
+export function loadTokenPackages(): TokenPackage[] {
+  return INITIAL_TOKEN_PACKAGES;
+}
+
+// ==========================================
+// TRANSAKSI PENGISIAN TOKEN PERSISTENCE
+// ==========================================
+export function loadTransactions(): TokenTransaction[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.TRANSACTIONS);
+    if (!raw) {
+      saveTransactions(INITIAL_TRANSACTIONS);
+      return INITIAL_TRANSACTIONS;
+    }
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : INITIAL_TRANSACTIONS;
+  } catch (e) {
+    console.error('Error loading transactions:', e);
+    return INITIAL_TRANSACTIONS;
+  }
+}
+
+export function saveTransactions(transactions: TokenTransaction[]): void {
+  try {
+    localStorage.setItem(STORAGE_KEYS.TRANSACTIONS, JSON.stringify(transactions));
+  } catch (e) {
+    console.error('Error saving transactions:', e);
+  }
+}
+
+export function addTransaction(transaction: TokenTransaction): TokenTransaction[] {
+  const current = loadTransactions();
+  // Prevent duplicate insertion by reference number
+  if (current.some(t => t.referenceNumber === transaction.referenceNumber)) {
+    return current;
+  }
+  const updated = [transaction, ...current];
+  saveTransactions(updated);
+  return updated;
+}
+
+export function updateTransactionStatus(
+  trxId: string,
+  status: 'pending' | 'success' | 'failed' | 'cancelled',
+  options?: { failedReason?: string; verifiedAt?: string }
+): { transactions: TokenTransaction[]; updatedTrx?: TokenTransaction } {
+  const current = loadTransactions();
+  let updatedTrx: TokenTransaction | undefined;
+
+  const updated = current.map(t => {
+    if (t.id === trxId) {
+      updatedTrx = {
+        ...t,
+        status,
+        verifiedAt: status === 'success' ? (options?.verifiedAt || new Date().toISOString()) : t.verifiedAt,
+        failedReason: options?.failedReason || t.failedReason
+      };
+      return updatedTrx;
+    }
+    return t;
+  });
+
+  saveTransactions(updated);
+  return { transactions: updated, updatedTrx };
+}
+
+// ==========================================
+// SWACAM CONFIG & LOGS PERSISTENCE
+// ==========================================
+export function loadSwacamConfig(): SwacamConfig {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.SWACAM_CONFIG);
+    if (!raw) {
+      saveSwacamConfig(INITIAL_SWACAM_CONFIG);
+      return INITIAL_SWACAM_CONFIG;
+    }
+    return JSON.parse(raw);
+  } catch (e) {
+    console.error('Error loading SWACAM config:', e);
+    return INITIAL_SWACAM_CONFIG;
+  }
+}
+
+export function saveSwacamConfig(config: SwacamConfig): void {
+  try {
+    localStorage.setItem(STORAGE_KEYS.SWACAM_CONFIG, JSON.stringify(config));
+  } catch (e) {
+    console.error('Error saving SWACAM config:', e);
+  }
+}
+
+export function loadSwacamLogs(): SwacamLog[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.SWACAM_LOGS);
+    if (!raw) {
+      saveSwacamLogs(INITIAL_SWACAM_LOGS);
+      return INITIAL_SWACAM_LOGS;
+    }
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : INITIAL_SWACAM_LOGS;
+  } catch (e) {
+    console.error('Error loading SWACAM logs:', e);
+    return INITIAL_SWACAM_LOGS;
+  }
+}
+
+export function saveSwacamLogs(logs: SwacamLog[]): void {
+  try {
+    localStorage.setItem(STORAGE_KEYS.SWACAM_LOGS, JSON.stringify(logs));
+  } catch (e) {
+    console.error('Error saving SWACAM logs:', e);
+  }
+}
+
+export function addSwacamLog(log: Omit<SwacamLog, 'id' | 'timestamp'>): SwacamLog[] {
+  const current = loadSwacamLogs();
+  const newLog: SwacamLog = {
+    ...log,
+    id: `log-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+    timestamp: new Date().toISOString()
+  };
+  const updated = [newLog, ...current].slice(0, 50); // keep last 50
+  saveSwacamLogs(updated);
+  return updated;
+}
+
+// ==========================================
+// APP SETTINGS PERSISTENCE
+// ==========================================
+export function loadAppSettings(): AppSettings {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.APP_SETTINGS);
+    if (!raw) {
+      saveAppSettings(INITIAL_APP_SETTINGS);
+      return INITIAL_APP_SETTINGS;
+    }
+    return JSON.parse(raw);
+  } catch (e) {
+    console.error('Error loading app settings:', e);
+    return INITIAL_APP_SETTINGS;
+  }
+}
+
+export function saveAppSettings(settings: AppSettings): void {
+  try {
+    localStorage.setItem(STORAGE_KEYS.APP_SETTINGS, JSON.stringify(settings));
+  } catch (e) {
+    console.error('Error saving app settings:', e);
+  }
+}
+
+// ==========================================
+// TOKEN SYSTEM CONFIG PERSISTENCE
+// ==========================================
+export function loadTokenConfig(): TokenSystemConfig {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.TOKEN_CONFIG);
+    if (!raw) {
+      saveTokenConfig(INITIAL_TOKEN_CONFIG);
+      return INITIAL_TOKEN_CONFIG;
+    }
+    return JSON.parse(raw);
+  } catch (e) {
+    console.error('Error loading token config:', e);
+    return INITIAL_TOKEN_CONFIG;
+  }
+}
+
+export function saveTokenConfig(config: TokenSystemConfig): void {
+  try {
+    localStorage.setItem(STORAGE_KEYS.TOKEN_CONFIG, JSON.stringify(config));
+  } catch (e) {
+    console.error('Error saving token config:', e);
+  }
+}
+

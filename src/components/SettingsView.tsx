@@ -10,18 +10,13 @@ import {
   Database,
   Smartphone,
   LogOut,
-  Check,
-  RefreshCw,
+  RotateCw,
   AlertTriangle,
   RotateCcw,
-  Layers,
-  Sparkles,
-  Link as LinkIcon
+  Layers
 } from 'lucide-react';
-import { User, UpdateCategory, UserRole, InviteLink } from '../types';
+import { User, UpdateCategory, InviteLink } from '../types';
 import { InstallPWAButton } from './InstallPWAButton';
-import { clearRememberedUser, saveCategories, saveUsers } from '../utils/storage';
-import { INITIAL_CATEGORIES, INITIAL_USERS } from '../utils/initialData';
 
 interface SettingsViewProps {
   currentUser: User;
@@ -62,7 +57,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [showResetConfirm, setShowResetConfirm] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const jsonImportRef = useRef<HTMLInputElement | null>(null);
 
   const isAdmin = currentUser.role === 'admin';
 
@@ -178,82 +172,34 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             <p className="text-xs text-slate-500 mt-1 font-mono">
               {currentUser.email || 'Akun Terdaftar di Perangkat Ini'}
             </p>
-            <p className="text-xs text-emerald-600 font-semibold mt-1 flex items-center justify-center sm:justify-start gap-1">
-              <Check className="w-3.5 h-3.5" />
-              <span>Akun ini tersimpan otomatis untuk auto-login di perangkat ini</span>
-            </p>
-
-            <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 mt-3">
+            <div className="mt-3 flex flex-wrap items-center justify-center sm:justify-start gap-2">
               <button
                 onClick={() => fileInputRef.current?.click()}
-                className="px-3.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
+                className="px-3 py-1.5 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-semibold transition cursor-pointer"
               >
-                <Upload className="w-3.5 h-3.5" />
-                <span>Ganti Foto</span>
+                Ganti Foto
               </button>
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleAvatarChange}
+                accept="image/*"
+                className="hidden"
+              />
               <button
                 onClick={handleResetToLogo}
-                className="px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-500 text-xs cursor-pointer"
+                className="px-3 py-1.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-medium transition cursor-pointer"
               >
-                Pakai Logo DEPOTEL
+                Gunakan Logo DEPOTEL
               </button>
               {isSaved && (
-                <span className="text-xs text-emerald-600 font-bold animate-in fade-in">
-                  Tersimpan!
+                <span className="text-xs text-emerald-600 font-semibold animate-in fade-in">
+                  ✓ Foto profil diperbarui
                 </span>
               )}
             </div>
-
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              onChange={handleAvatarChange}
-              className="hidden"
-            />
           </div>
         </div>
-
-        {/* Quick Role Switcher for Testing (Uji Coba Hak Akses) */}
-        {onSwitchUser && (
-          <div className="pt-4 mt-1">
-            <div className="flex items-center justify-between gap-2 mb-2">
-              <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-blue-600" />
-                <span>Beralih Profil (Uji Coba Hak Akses Admin / User):</span>
-              </span>
-            </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              {users.map((u) => {
-                const isSelected = u.id === currentUser.id;
-                const isUserAdmin = u.role === 'admin';
-                return (
-                  <button
-                    key={u.id}
-                    onClick={() => !isSelected && onSwitchUser(u)}
-                    className={`p-2.5 rounded-xl text-left border transition text-xs flex flex-col justify-between ${
-                      isSelected
-                        ? 'border-blue-600 bg-blue-50/70 ring-1 ring-blue-500 font-bold text-blue-900'
-                        : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-700 cursor-pointer'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between w-full">
-                      <span className="truncate font-semibold">{u.name}</span>
-                      {isSelected && <Check className="w-3 h-3 text-blue-600 shrink-0" />}
-                    </div>
-                    <span
-                      className={`text-[9px] font-bold uppercase mt-1 px-1.5 py-0.5 rounded w-fit ${
-                        isUserAdmin ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-600'
-                      }`}
-                    >
-                      {isUserAdmin ? 'Admin' : 'User'}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Section 2: Kelola Tim & Link Undangan */}
