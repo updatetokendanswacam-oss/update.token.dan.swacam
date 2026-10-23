@@ -1,5 +1,5 @@
 import React from 'react';
-import { RotateCw, UserPlus, Users, ShieldCheck, Menu } from 'lucide-react';
+import { RotateCw, UserPlus, Users, ShieldCheck, Menu, HardDrive } from 'lucide-react';
 import { User } from '../types';
 
 interface HeaderProps {
@@ -9,17 +9,19 @@ interface HeaderProps {
   onOpenLogoutModal: () => void;
   onRefresh: () => void;
   onToggleMobileSidebar?: () => void;
+  onOpenGoogleDrive?: () => void;
   isRefreshing: boolean;
   onSelectNav?: (tab: 'dashboard' | 'settings') => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({
+export const Header: React.FC<HeaderProps> = React.memo(({
   currentUser,
   onOpenUserManagement,
   onOpenInviteModal,
   onOpenLogoutModal,
   onRefresh,
   onToggleMobileSidebar,
+  onOpenGoogleDrive,
   isRefreshing,
   onSelectNav,
 }) => {
@@ -44,14 +46,11 @@ export const Header: React.FC<HeaderProps> = ({
             onClick={() => onSelectNav && onSelectNav('dashboard')}
             className="flex items-center gap-2.5 cursor-pointer group select-none"
           >
-            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-white/10 flex items-center justify-center p-1.5 border border-white/10 group-hover:bg-white/20 transition">
+            <div className="w-10 h-10 rounded-2xl bg-white p-1 border border-white/20 shadow-sm flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
               <img
                 src="/logo.png"
-                alt="DEPOTEL"
-                className="w-full h-full object-contain"
-                onError={(e) => {
-                  (e.target as HTMLElement).style.display = 'none';
-                }}
+                alt="DEPOTEL GROUP"
+                className="w-full h-full object-contain aspect-square"
               />
             </div>
             <div>
@@ -75,6 +74,18 @@ export const Header: React.FC<HeaderProps> = ({
           >
             <RotateCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin text-blue-400' : ''}`} />
           </button>
+
+          {/* Google Drive Sync Shortcut */}
+          {onOpenGoogleDrive && (
+            <button
+              onClick={onOpenGoogleDrive}
+              title="File Explorer & Google Drive (ID: 10SRjggSklTu7YbiArs3K-Pfl3macje542DA38xmJjkM)"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-500/20 hover:bg-blue-500/30 border border-blue-400/30 text-blue-200 text-xs font-bold transition cursor-pointer"
+            >
+              <HardDrive className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">File Explorer</span>
+            </button>
+          )}
 
           {/* Admin Specific Action Buttons */}
           {isAdmin && (
@@ -135,4 +146,4 @@ export const Header: React.FC<HeaderProps> = ({
       </div>
     </header>
   );
-};
+});

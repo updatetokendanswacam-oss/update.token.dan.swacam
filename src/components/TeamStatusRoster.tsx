@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Users, Radio } from 'lucide-react';
 import { User } from '../types';
 
@@ -6,8 +6,11 @@ interface TeamStatusRosterProps {
   users: User[];
 }
 
-export const TeamStatusRoster: React.FC<TeamStatusRosterProps> = ({ users }) => {
-  const onlineCount = users.filter((u) => u.isOnline).length;
+export const TeamStatusRoster: React.FC<TeamStatusRosterProps> = React.memo(({ users }) => {
+  const onlineCount = useMemo(
+    () => users.filter((u) => u.isOnline).length,
+    [users]
+  );
 
   return (
     <div className="bg-white border border-slate-200/80 rounded-2xl p-4 sm:p-5 shadow-xs max-w-4xl mx-auto">
@@ -41,7 +44,7 @@ export const TeamStatusRoster: React.FC<TeamStatusRosterProps> = ({ users }) => 
           return (
             <div
               key={user.id}
-              className={`flex items-center gap-2 p-2 rounded-xl border transition-all ${
+              className={`flex items-center gap-2 p-2 rounded-xl border transition-colors ${
                 isOnline
                   ? 'bg-emerald-50/40 border-emerald-200'
                   : 'bg-slate-50 border-slate-200/60 opacity-70'
@@ -51,6 +54,7 @@ export const TeamStatusRoster: React.FC<TeamStatusRosterProps> = ({ users }) => 
                 <img
                   src={user.avatar || '/logo.png'}
                   alt={user.name}
+                  loading="lazy"
                   className="w-7 h-7 rounded-full object-cover bg-white border border-slate-200"
                 />
                 <span
@@ -74,4 +78,4 @@ export const TeamStatusRoster: React.FC<TeamStatusRosterProps> = ({ users }) => 
       </div>
     </div>
   );
-};
+});

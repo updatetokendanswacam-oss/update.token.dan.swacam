@@ -49,11 +49,16 @@ export const InstallPWAButton: React.FC<InstallPWAButtonProps> = ({
     <>
       <button
         onClick={handleInstallClick}
-        title="Pasang aplikasi DEPOTEL di HP / Layar Utama"
+        title="Download dan pasang aplikasi DEPOTEL di HP / Layar Utama"
         className={`${getButtonStyles()} ${className}`}
       >
-        <Download className="w-4 h-4 animate-bounce" />
-        <span>INSTALL APLIKASI DEPOTEL</span>
+        <img
+          src="/logo.png"
+          alt="DEPOTEL"
+          className="w-5 h-5 rounded-md object-contain bg-white p-0.5 shadow-xs shrink-0"
+        />
+        <Download className="w-4 h-4 animate-bounce shrink-0" />
+        <span>DOWNLOAD WEB APP</span>
       </button>
 
       {/* iOS Installation Guide Modal */}
@@ -67,11 +72,13 @@ export const InstallPWAButton: React.FC<InstallPWAButtonProps> = ({
               <X className="w-5 h-5" />
             </button>
 
-            <div className="flex items-center gap-3 mb-4">
-              <img src="/logo.png" alt="DEPOTEL" className="w-12 h-12 rounded-xl object-contain bg-white p-1" />
+            <div className="flex items-center gap-3.5 mb-4 pb-3 border-b border-slate-800">
+              <div className="w-14 h-14 rounded-2xl bg-white p-1 border-2 border-white/90 shadow-md shrink-0 flex items-center justify-center">
+                <img src="/logo.png" alt="DEPOTEL" className="w-full h-full object-contain" />
+              </div>
               <div>
-                <h3 className="font-bold text-base text-white">Pasang di iPhone / iPad</h3>
-                <p className="text-xs text-slate-400">PWA DEPOTEL Standalone</p>
+                <h3 className="font-bold text-base text-white leading-tight">Download Web App DEPOTEL</h3>
+                <p className="text-xs text-blue-300 font-medium mt-0.5">Pasang di iPhone / iPad (Safari)</p>
               </div>
             </div>
 
@@ -115,11 +122,13 @@ export const InstallPWAButton: React.FC<InstallPWAButtonProps> = ({
               <X className="w-5 h-5" />
             </button>
 
-            <div className="flex items-center gap-3 mb-4">
-              <img src="/logo.png" alt="DEPOTEL" className="w-12 h-12 rounded-xl object-contain bg-white p-1" />
+            <div className="flex items-center gap-3.5 mb-4 pb-3 border-b border-slate-800">
+              <div className="w-14 h-14 rounded-2xl bg-white p-1 border-2 border-white/90 shadow-md shrink-0 flex items-center justify-center">
+                <img src="/logo.png" alt="DEPOTEL" className="w-full h-full object-contain" />
+              </div>
               <div>
-                <h3 className="font-bold text-base text-white">Pasang Aplikasi DEPOTEL</h3>
-                <p className="text-xs text-slate-400">Android & Komputer</p>
+                <h3 className="font-bold text-base text-white leading-tight">Download Web App DEPOTEL</h3>
+                <p className="text-xs text-blue-300 font-medium mt-0.5">Android & Komputer</p>
               </div>
             </div>
 

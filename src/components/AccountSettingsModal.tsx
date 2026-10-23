@@ -134,9 +134,14 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({
 
           {/* PWA Install Area */}
           <div className="p-4 rounded-2xl bg-[#eeeffa] border border-[#e2e4f7] flex items-center justify-between gap-3">
-            <div>
-              <p className="text-xs font-bold text-[#1e2238]">Pasang Aplikasi PWA</p>
-              <p className="text-[11px] text-slate-500">Buka langsung seperti aplikasi HP tanpa browser</p>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-white p-1 border border-slate-200 shadow-xs shrink-0 flex items-center justify-center">
+                <img src="/logo.png" alt="DEPOTEL" className="w-full h-full object-contain" />
+              </div>
+              <div>
+                <p className="text-xs font-bold text-[#1e2238]">Download Web App DEPOTEL</p>
+                <p className="text-[11px] text-slate-500">Pasang langsung ke layar utama HP</p>
+              </div>
             </div>
             <InstallPWAButton variant="compact" />
           </div>

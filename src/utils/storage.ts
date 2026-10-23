@@ -1,6 +1,7 @@
 import {
   User,
   UpdateCategory,
+  SiteItem,
   PhotoRecord,
   InviteLink,
   TokenBalance,
@@ -24,7 +25,7 @@ import {
 } from './initialData';
 
 const STORAGE_KEYS = {
-  CATEGORIES: 'depotel_categories_v3',
+  CATEGORIES: 'depotel_categories_v4',
   USERS: 'depotel_users_v2',
   SESSION: 'depotel_session_v2',
   INVITES: 'depotel_invites_v2',
@@ -131,6 +132,32 @@ export function loadCategories(): UpdateCategory[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.CATEGORIES);
     if (!raw) {
+      // Migrate from legacy v3 if available, restoring genuine saved state
+      const legacyRaw = localStorage.getItem('depotel_categories_v3');
+      if (legacyRaw) {
+        try {
+          const parsedLegacy = JSON.parse(legacyRaw);
+          if (Array.isArray(parsedLegacy) && parsedLegacy.length > 0) {
+            const clean = parsedLegacy.map((cat: UpdateCategory) => ({
+              ...cat,
+              sites: cat.sites.map((site: SiteItem) => {
+                const isInitialSite =
+                  site.id.startsWith('s') ||
+                  site.id.startsWith('t') ||
+                  site.id.startsWith('m');
+                return {
+                  ...site,
+                  checked: isInitialSite ? false : !!site.checked,
+                };
+              }),
+            }));
+            saveCategories(clean);
+            return clean;
+          }
+        } catch {
+          // ignore error
+        }
+      }
       saveCategories(INITIAL_CATEGORIES);
       return INITIAL_CATEGORIES;
     }

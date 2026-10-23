@@ -8,7 +8,8 @@ import {
   X,
   ChevronRight,
   Shield,
-  Smartphone
+  Smartphone,
+  HardDrive
 } from 'lucide-react';
 import { User, UpdateCategory } from '../types';
 
@@ -21,9 +22,10 @@ interface SidebarProps {
   onSelectCategory: (catId: string) => void;
   isOpenMobile?: boolean;
   onCloseMobile?: () => void;
+  onOpenGoogleDrive?: () => void;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({
+export const Sidebar: React.FC<SidebarProps> = React.memo(({
   currentUser,
   activeNav,
   onSelectNav,
@@ -32,13 +34,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onSelectCategory,
   isOpenMobile = false,
   onCloseMobile,
+  onOpenGoogleDrive,
 }) => {
   const isAdmin = currentUser.role === 'admin';
 
-  const totalSites = categories.reduce((acc, cat) => acc + cat.sites.length, 0);
-  const checkedSites = categories.reduce(
-    (acc, cat) => acc + cat.sites.filter((s) => s.checked).length,
-    0
+  const totalSites = React.useMemo(
+    () => categories.reduce((acc, cat) => acc + cat.sites.length, 0),
+    [categories]
+  );
+  const checkedSites = React.useMemo(
+    () => categories.reduce((acc, cat) => acc + cat.sites.filter((s) => s.checked).length, 0),
+    [categories]
   );
 
   const sidebarContent = (
@@ -52,14 +58,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
           }}
           className="flex items-center gap-3 cursor-pointer group"
         >
-          <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center p-1.5 border border-white/10 group-hover:bg-white/20 transition">
+          <div className="w-11 h-11 rounded-2xl bg-white p-1 border border-white/20 shadow-sm flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
             <img
               src="/logo.png"
-              alt="DEPOTEL"
-              className="w-full h-full object-contain"
-              onError={(e) => {
-                (e.target as HTMLElement).style.display = 'none';
-              }}
+              alt="DEPOTEL GROUP"
+              className="w-full h-full object-contain aspect-square"
             />
           </div>
           <div>
@@ -138,6 +141,30 @@ export const Sidebar: React.FC<SidebarProps> = ({
             })}
           </div>
         </div>
+
+        {/* Google Drive Integration Quick Access */}
+        {onOpenGoogleDrive && (
+          <button
+            onClick={() => {
+              onOpenGoogleDrive();
+              if (onCloseMobile) onCloseMobile();
+            }}
+            className="w-full p-3 rounded-2xl bg-blue-600/15 hover:bg-blue-600/25 border border-blue-500/30 text-left transition flex items-center justify-between group cursor-pointer"
+          >
+            <div className="flex items-center gap-2.5">
+              <div className="w-7 h-7 rounded-lg bg-blue-500/20 text-blue-400 flex items-center justify-center">
+                <HardDrive className="w-4 h-4" />
+              </div>
+              <div className="min-w-0">
+                <p className="font-bold text-xs text-white">File Explorer / Drive</p>
+                <p className="text-[10px] text-blue-300 font-mono truncate max-w-[130px]">10SRjggSklTu...</p>
+              </div>
+            </div>
+            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-500/30 text-blue-200">
+              Sync
+            </span>
+          </button>
+        )}
 
         {/* Status Operasional Site Ringkas */}
         <div className="p-3.5 rounded-2xl bg-slate-900/60 border border-slate-800 text-xs space-y-2">
@@ -257,4 +284,4 @@ export const Sidebar: React.FC<SidebarProps> = ({
       )}
     </>
   );
-};
+});

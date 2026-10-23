@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   loadCategories,
   saveCategories,
@@ -24,24 +24,26 @@ import { INITIAL_CATEGORIES, INITIAL_USERS } from './utils/initialData';
 import { Header } from './components/Header';
 import { Sidebar } from './components/Sidebar';
 import { OfflineBanner } from './components/OfflineBanner';
-import { TeamStatusRoster } from './components/TeamStatusRoster';
 import { DashboardOverview } from './components/DashboardOverview';
 import { CategoryDetailView } from './components/CategoryDetailView';
 import { SettingsView } from './components/SettingsView';
-import { CameraModal } from './components/CameraModal';
-import { PhotoGalleryModal } from './components/PhotoGalleryModal';
-import { EditSiteModal } from './components/EditSiteModal';
-import { AddSiteModal } from './components/AddSiteModal';
-import { AddCategoryModal } from './components/AddCategoryModal';
-import { WhatsAppModal } from './components/WhatsAppModal';
-import { ExportModal } from './components/ExportModal';
-import { UserManagementModal } from './components/UserManagementModal';
-import { AccountSettingsModal } from './components/AccountSettingsModal';
-import { InviteModal } from './components/InviteModal';
 import { LoginModal } from './components/LoginModal';
-import { ConfirmDeleteModal } from './components/ConfirmDeleteModal';
 import { PullToRefresh } from './components/PullToRefresh';
 import { Home, Settings } from 'lucide-react';
+
+// Code-split heavy modals with React.lazy
+const CameraModal = React.lazy(() => import('./components/CameraModal').then((m) => ({ default: m.CameraModal })));
+const PhotoGalleryModal = React.lazy(() => import('./components/PhotoGalleryModal').then((m) => ({ default: m.PhotoGalleryModal })));
+const EditSiteModal = React.lazy(() => import('./components/EditSiteModal').then((m) => ({ default: m.EditSiteModal })));
+const AddSiteModal = React.lazy(() => import('./components/AddSiteModal').then((m) => ({ default: m.AddSiteModal })));
+const AddCategoryModal = React.lazy(() => import('./components/AddCategoryModal').then((m) => ({ default: m.AddCategoryModal })));
+const WhatsAppModal = React.lazy(() => import('./components/WhatsAppModal').then((m) => ({ default: m.WhatsAppModal })));
+const ExportModal = React.lazy(() => import('./components/ExportModal').then((m) => ({ default: m.ExportModal })));
+const UserManagementModal = React.lazy(() => import('./components/UserManagementModal').then((m) => ({ default: m.UserManagementModal })));
+const AccountSettingsModal = React.lazy(() => import('./components/AccountSettingsModal').then((m) => ({ default: m.AccountSettingsModal })));
+const InviteModal = React.lazy(() => import('./components/InviteModal').then((m) => ({ default: m.InviteModal })));
+const ConfirmDeleteModal = React.lazy(() => import('./components/ConfirmDeleteModal').then((m) => ({ default: m.ConfirmDeleteModal })));
+const GoogleDriveModal = React.lazy(() => import('./components/GoogleDriveModal').then((m) => ({ default: m.GoogleDriveModal })));
 
 export default function App() {
   // Core Operational States
@@ -69,6 +71,7 @@ export default function App() {
   const [showExportModal, setShowExportModal] = useState(false);
   const [showAddSiteModal, setShowAddSiteModal] = useState(false);
   const [showAddCategoryModal, setShowAddCategoryModal] = useState(false);
+  const [showGoogleDriveModal, setShowGoogleDriveModal] = useState(false);
 
   // Edit Category state
   const [editingCategory, setEditingCategory] = useState<UpdateCategory | null>(null);
@@ -100,25 +103,35 @@ export default function App() {
     }
   }, []);
 
-  // Sync state changes with persistence
+  // Debounced persistence to eliminate UI blocking on frequent updates
   useEffect(() => {
-    saveCategories(categories);
+    const t = setTimeout(() => {
+      saveCategories(categories);
+    }, 250);
+    return () => clearTimeout(t);
   }, [categories]);
 
   useEffect(() => {
-    saveUsers(users);
+    const t = setTimeout(() => {
+      saveUsers(users);
+    }, 250);
+    return () => clearTimeout(t);
   }, [users]);
 
   useEffect(() => {
-    saveInvites(invites);
+    const t = setTimeout(() => {
+      saveInvites(invites);
+    }, 250);
+    return () => clearTimeout(t);
   }, [invites]);
 
-  const showToast = (message: string) => {
+  const showToast = useCallback((message: string) => {
     setToastMessage(message);
-    setTimeout(() => {
+    const t = setTimeout(() => {
       setToastMessage(null);
     }, 3000);
-  };
+    return () => clearTimeout(t);
+  }, []);
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -129,8 +142,11 @@ export default function App() {
     showToast('Data berhasil diperbarui');
   };
 
-  // Find currently open category
-  const currentCategory = categories.find((c) => c.id === selectedCategoryId) || categories[0];
+  // Find currently open category (memoized)
+  const currentCategory = useMemo(
+    () => categories.find((c) => c.id === selectedCategoryId) || categories[0],
+    [categories, selectedCategoryId]
+  );
 
   // User Authentication Handlers
   const handleSelectUser = (user: User) => {
@@ -191,148 +207,152 @@ export default function App() {
   };
 
   // Category & Site Navigation
-  const handleOpenCategory = (categoryId: string) => {
+  const handleOpenCategory = useCallback((categoryId: string) => {
     setSelectedCategoryId(categoryId);
     setViewMode('detail');
     window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
+  }, []);
 
-  const handleBackToOverview = () => {
+  const handleBackToOverview = useCallback(() => {
     setViewMode('overview');
+  }, []);
+
+  // Helper to find a site by ID across all categories
+  const findSiteGlobally = (siteId: string, currentCats: UpdateCategory[]): SiteItem | undefined => {
+    for (const cat of currentCats) {
+      const found = cat.sites.find((s) => s.id === siteId);
+      if (found) return found;
+    }
+    return undefined;
   };
 
-  // Site Check/Uncheck action
-  const handleToggleCheck = (siteId: string) => {
-    setCategories((prevCategories) =>
-      prevCategories.map((cat) => {
-        if (cat.id !== selectedCategoryId) return cat;
+  // Helper to update a site across all categories (matching by id, siteId, or meterId)
+  const updateSiteGlobally = (
+    currentCats: UpdateCategory[],
+    targetSiteId: string,
+    updater: (site: SiteItem) => SiteItem
+  ): UpdateCategory[] => {
+    const refSite = findSiteGlobally(targetSiteId, currentCats);
+    return currentCats.map((cat) => ({
+      ...cat,
+      sites: cat.sites.map((site) => {
+        const isExactMatch = site.id === targetSiteId;
+        const isSameSiteCode =
+          refSite?.siteId &&
+          site.siteId &&
+          site.siteId.toLowerCase() === refSite.siteId.toLowerCase();
+        const isSameMeter =
+          refSite?.meterId && site.meterId && site.meterId === refSite.meterId;
 
-        const updatedSites = cat.sites.map((site) => {
-          if (site.id !== siteId) return site;
-          const nextChecked = !site.checked;
-          return {
-            ...site,
-            checked: nextChecked,
-            updatedAt: new Date().toISOString(),
-            updatedBy: currentUser?.name || 'Petugas',
-          };
-        });
-
-        return {
-          ...cat,
-          sites: updatedSites,
-        };
-      })
-    );
+        if (isExactMatch || isSameSiteCode || isSameMeter) {
+          return updater(site);
+        }
+        return site;
+      }),
+    }));
   };
 
-  // Token Management
-  const handleAddToken = (siteId: string, token: string) => {
-    setCategories((prevCategories) =>
-      prevCategories.map((cat) => {
-        if (cat.id !== selectedCategoryId) return cat;
-
-        const updatedSites = cat.sites.map((site) => {
-          if (site.id !== siteId) return site;
-          const currentTokens = site.tokens || [];
-          return {
-            ...site,
-            tokens: [...currentTokens, token],
-            updatedAt: new Date().toISOString(),
-            updatedBy: currentUser?.name || 'Petugas',
-          };
-        });
-
-        return {
-          ...cat,
-          sites: updatedSites,
-        };
-      })
-    );
-    showToast(`Token listrik berhasil ditambahkan`);
-  };
-
-  const handleRemoveToken = (siteId: string, tokenIndex: number) => {
-    setCategories((prevCategories) =>
-      prevCategories.map((cat) => {
-        if (cat.id !== selectedCategoryId) return cat;
-
-        const updatedSites = cat.sites.map((site) => {
-          if (site.id !== siteId) return site;
-          const currentTokens = site.tokens || [];
-          return {
-            ...site,
-            tokens: currentTokens.filter((_, idx) => idx !== tokenIndex),
-            updatedAt: new Date().toISOString(),
-            updatedBy: currentUser?.name || 'Petugas',
-          };
-        });
-
-        return {
-          ...cat,
-          sites: updatedSites,
-        };
-      })
-    );
-  };
-
-  // Photo Watermarking & IndexedDB Storage
-  const handleSavePhoto = async (siteId: string, photo: PhotoRecord) => {
-    try {
-      await savePhotoToDB(photo);
-
-      setCategories((prevCategories) =>
-        prevCategories.map((cat) => {
-          if (cat.id !== selectedCategoryId) return cat;
-
-          const updatedSites = cat.sites.map((site) => {
-            if (site.id !== siteId) return site;
-            const existingPhotos = site.photos || [];
+  // Site Check/Uncheck action (Hanya mengubah status site yang diklik oleh pengguna)
+  const handleToggleCheck = useCallback((targetSiteId: string) => {
+    setCategories((prevCategories) => {
+      const updated = prevCategories.map((cat) => ({
+        ...cat,
+        sites: cat.sites.map((site) => {
+          if (site.id === targetSiteId) {
             return {
               ...site,
-              photos: [...existingPhotos, photo],
+              checked: !site.checked,
               updatedAt: new Date().toISOString(),
               updatedBy: currentUser?.name || 'Petugas',
             };
-          });
+          }
+          return site;
+        }),
+      }));
+      saveCategories(updated);
+      return updated;
+    });
+  }, [currentUser?.name]);
 
+  // Token Management (Memperbarui nomor token tanpa mengubah status centang secara otomatis)
+  const handleAddToken = useCallback((siteId: string, token: string) => {
+    setCategories((prevCategories) => {
+      const updated = updateSiteGlobally(prevCategories, siteId, (site) => {
+        const currentTokens = site.tokens || [];
+        return {
+          ...site,
+          tokens: [...currentTokens, token],
+          updatedAt: new Date().toISOString(),
+          updatedBy: currentUser?.name || 'Petugas',
+        };
+      });
+      saveCategories(updated);
+      return updated;
+    });
+    showToast(`Token listrik berhasil ditambahkan`);
+  }, [currentUser?.name, showToast]);
+
+  const handleRemoveToken = useCallback((siteId: string, tokenIndex: number) => {
+    setCategories((prevCategories) => {
+      const updated = updateSiteGlobally(prevCategories, siteId, (site) => {
+        const currentTokens = site.tokens || [];
+        return {
+          ...site,
+          tokens: currentTokens.filter((_, idx) => idx !== tokenIndex),
+          updatedAt: new Date().toISOString(),
+          updatedBy: currentUser?.name || 'Petugas',
+        };
+      });
+      saveCategories(updated);
+      return updated;
+    });
+  }, [currentUser?.name]);
+
+  // Photo Watermarking & IndexedDB Storage (Menyimpan foto tanpa mengubah status centang secara otomatis)
+  const handleSavePhoto = useCallback(async (siteId: string, photo: PhotoRecord) => {
+    try {
+      await savePhotoToDB(photo);
+
+      setCategories((prevCategories) => {
+        const updated = updateSiteGlobally(prevCategories, siteId, (site) => {
+          const existingPhotos = site.photos || [];
           return {
-            ...cat,
-            sites: updatedSites,
+            ...site,
+            photos: [...existingPhotos, photo],
+            updatedAt: new Date().toISOString(),
+            updatedBy: currentUser?.name || 'Petugas',
           };
-        })
-      );
+        });
+        saveCategories(updated);
+        return updated;
+      });
 
       setCameraSite(null);
-      showToast('Foto dokumentasi tersimpan dengan watermark GPS');
+      showToast('Foto dokumentasi SWACAM tersimpan');
     } catch (err) {
       console.error('Failed to save photo record:', err);
       showToast('Gagal menyimpan foto dokumentasi');
     }
-  };
+  }, [currentUser?.name, showToast]);
 
-  const handleDeletePhoto = async (photoId: string) => {
+  const handleDeletePhoto = useCallback(async (photoId: string) => {
     try {
       await deletePhotoFromDB(photoId);
 
-      setCategories((prevCategories) =>
-        prevCategories.map((cat) => {
-          if (cat.id !== selectedCategoryId) return cat;
-
-          const updatedSites = cat.sites.map((site) => {
+      setCategories((prevCategories) => {
+        const updated = prevCategories.map((cat) => ({
+          ...cat,
+          sites: cat.sites.map((site) => {
             if (!site.photos) return site;
             return {
               ...site,
               photos: site.photos.filter((p) => p.id !== photoId),
             };
-          });
-
-          return {
-            ...cat,
-            sites: updatedSites,
-          };
-        })
-      );
+          }),
+        }));
+        saveCategories(updated);
+        return updated;
+      });
 
       setViewingPhoto(null);
       showToast('Foto berhasil dihapus');
@@ -340,28 +360,31 @@ export default function App() {
       console.error('Failed to delete photo:', err);
       showToast('Gagal menghapus foto');
     }
-  };
+  }, [showToast]);
 
-  // Site Edit & Add
-  const handleEditSite = (site: SiteItem) => {
+  // Site Edit & Add (Diperbarui di semua kategori)
+  const handleEditSite = useCallback((site: SiteItem) => {
     setEditingSite(site);
-  };
+  }, []);
 
-  const handleSaveEditedSite = (updatedSite: SiteItem) => {
-    setCategories((prev) =>
-      prev.map((cat) => {
-        if (cat.id !== selectedCategoryId) return cat;
-        return {
-          ...cat,
-          sites: cat.sites.map((s) => (s.id === updatedSite.id ? updatedSite : s)),
-        };
-      })
-    );
+  const handleSaveEditedSite = useCallback((updatedSite: SiteItem) => {
+    setCategories((prev) => {
+      const updated = updateSiteGlobally(prev, updatedSite.id, (s) => ({
+        ...s,
+        siteId: updatedSite.siteId,
+        siteName: updatedSite.siteName,
+        meterId: updatedSite.meterId,
+        updatedAt: new Date().toISOString(),
+        updatedBy: currentUser?.name || 'Petugas',
+      }));
+      saveCategories(updated);
+      return updated;
+    });
     setEditingSite(null);
-    showToast(`Data site ${updatedSite.siteId} berhasil diperbarui`);
-  };
+    showToast(`Data site ${updatedSite.siteId} berhasil diperbarui di semua kategori`);
+  }, [currentUser?.name, showToast]);
 
-  const handleAddSite = (siteData: { meterId: string; siteId: string; siteName: string }) => {
+  const handleAddSite = useCallback((siteData: { meterId: string; siteId: string; siteName: string }) => {
     const newSite: SiteItem = {
       id: `site-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
       meterId: siteData.meterId,
@@ -386,22 +409,23 @@ export default function App() {
 
     setShowAddSiteModal(false);
     showToast(`Site ${newSite.siteId} berhasil ditambahkan ke daftar`);
-  };
+  }, [selectedCategoryId, currentUser?.name, showToast]);
 
-  const handleDeleteSite = (siteId: string) => {
-    const siteToDelete = currentCategory?.sites.find((s) => s.id === siteId);
+  const handleDeleteSite = useCallback((siteId: string) => {
+    const activeCat = categories.find((c) => c.id === selectedCategoryId);
+    const siteToDelete = activeCat?.sites.find((s) => s.id === siteId);
     if (!siteToDelete) return;
     setDeleteModalState({
       type: 'site',
       site: siteToDelete,
     });
-  };
+  }, [categories, selectedCategoryId]);
 
-  const handleEditCategory = (cat: UpdateCategory) => {
+  const handleEditCategory = useCallback((cat: UpdateCategory) => {
     setEditingCategory(cat);
-  };
+  }, []);
 
-  const handleUpdateSiteCount = (categoryId: string, newTotal: number) => {
+  const handleUpdateSiteCount = useCallback((categoryId: string, newTotal: number) => {
     setCategories((prev) =>
       prev.map((cat) => {
         if (cat.id !== categoryId) return cat;
@@ -431,24 +455,24 @@ export default function App() {
           );
           return {
             ...cat,
-            sites: [...cat.sites, additionalSites as unknown as SiteItem],
+            sites: [...cat.sites, ...additionalSites],
           };
         }
       })
     );
     showToast(`Total site berhasil disesuaikan menjadi ${newTotal}`);
-  };
+  }, [showToast]);
 
-  const handleDeleteCategory = (categoryId: string) => {
+  const handleDeleteCategory = useCallback((categoryId: string) => {
     const catToDelete = categories.find((c) => c.id === categoryId);
     if (!catToDelete) return;
     setDeleteModalState({
       type: 'category',
       category: catToDelete,
     });
-  };
+  }, [categories]);
 
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = useCallback(() => {
     if (!deleteModalState) return;
 
     if (deleteModalState.type === 'site' && deleteModalState.site) {
@@ -476,7 +500,7 @@ export default function App() {
     }
 
     setDeleteModalState(null);
-  };
+  }, [deleteModalState, selectedCategoryId, showToast]);
 
   // User Management
   const handleAddUser = (newUser: User) => {
@@ -516,6 +540,42 @@ export default function App() {
     setInvites((prev) => [newInvite, ...prev]);
     showToast(`Tautan undangan kode ${newInvite.code} berhasil dibuat`);
     return newInvite;
+  };
+
+  // Google Drive Import Handler
+  const handleImportSitesFromDrive = (importedSites: SiteItem[], categoryTitle: string) => {
+    const existingIndex = categories.findIndex(
+      (c) => c.title.toLowerCase() === categoryTitle.toLowerCase()
+    );
+
+    if (existingIndex >= 0) {
+      setCategories((prev) =>
+        prev.map((cat, idx) => {
+          if (idx !== existingIndex) return cat;
+          const existingIds = new Set(cat.sites.map((s) => s.siteId));
+          const newSites = importedSites.filter((s) => !existingIds.has(s.siteId));
+          return {
+            ...cat,
+            sites: [...cat.sites, ...newSites],
+          };
+        })
+      );
+      showToast(`${importedSites.length} site berhasil disinkronkan ke "${categoryTitle}"`);
+    } else {
+      const newCategory: UpdateCategory = {
+        id: `cat-drive-${Date.now()}`,
+        title: categoryTitle || 'Google Drive Sync',
+        period: `Bulan ${new Date().toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })}`,
+        type: 'custom',
+        sites: importedSites,
+        allowCamera: true,
+        allowTokenInput: true,
+      };
+      setCategories((prev) => [newCategory, ...prev]);
+      setSelectedCategoryId(newCategory.id);
+      setViewMode('detail');
+      showToast(`Kategori "${newCategory.title}" berhasil dibuat dengan ${importedSites.length} site`);
+    }
   };
 
   // Reset to initial demo data
@@ -566,6 +626,7 @@ export default function App() {
           }}
           isOpenMobile={isOpenMobileSidebar}
           onCloseMobile={() => setIsOpenMobileSidebar(false)}
+          onOpenGoogleDrive={() => setShowGoogleDriveModal(true)}
         />
 
         {/* Right Content Area with responsive offset for Sidebar */}
@@ -578,6 +639,7 @@ export default function App() {
             onOpenLogoutModal={() => setShowAccountSettings(true)}
             onToggleMobileSidebar={() => setIsOpenMobileSidebar(true)}
             onRefresh={handleRefresh}
+            onOpenGoogleDrive={() => setShowGoogleDriveModal(true)}
             onSelectNav={(nav) => {
               setActiveNav(nav);
               if (nav === 'dashboard') {
@@ -589,9 +651,6 @@ export default function App() {
 
           {/* Main Content Area: pb-24 on mobile ensures footer bottom navigation never covers content */}
           <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6 pb-24 lg:pb-12">
-            {/* Status Tim Terdaftar (Live Roster) */}
-            <TeamStatusRoster users={users} />
-
             {/* Conditional rendering between Beranda (Dashboard) and Pengaturan (Settings) */}
             {activeNav === 'dashboard' ? (
               viewMode === 'overview' ? (
@@ -638,6 +697,7 @@ export default function App() {
                 onOpenInviteModal={() => setShowInviteModal(true)}
                 onOpenExportModal={() => setShowExportModal(true)}
                 onOpenAddCategoryModal={() => setShowAddCategoryModal(true)}
+                onOpenGoogleDrive={() => setShowGoogleDriveModal(true)}
                 onLogout={handleLogout}
                 onResetData={handleResetData}
                 onRefresh={handleRefresh}
@@ -697,123 +757,135 @@ export default function App() {
           </div>
         )}
 
-        {/* Modals & Dialogs */}
-        {cameraSite && (
-          <CameraModal
-            site={cameraSite}
-            currentUser={currentUser}
-            onClose={() => setCameraSite(null)}
-            onSavePhoto={handleSavePhoto}
-          />
-        )}
+        {/* Lazy-Loaded Modals & Dialogs (Loaded on-demand to optimize initial bundle & memory) */}
+        <React.Suspense fallback={null}>
+          {cameraSite && (
+            <CameraModal
+              site={cameraSite}
+              currentUser={currentUser}
+              onClose={() => setCameraSite(null)}
+              onSavePhoto={handleSavePhoto}
+            />
+          )}
 
-        {viewingPhoto && (
-          <PhotoGalleryModal
-            site={viewingPhoto.site}
-            initialIndex={viewingPhoto.index}
-            currentUser={currentUser}
-            onClose={() => setViewingPhoto(null)}
-            onDeletePhoto={handleDeletePhoto}
-          />
-        )}
+          {viewingPhoto && (
+            <PhotoGalleryModal
+              site={viewingPhoto.site}
+              initialIndex={viewingPhoto.index}
+              currentUser={currentUser}
+              onClose={() => setViewingPhoto(null)}
+              onDeletePhoto={handleDeletePhoto}
+            />
+          )}
 
-        {editingSite && (
-          <EditSiteModal
-            site={editingSite}
-            onClose={() => setEditingSite(null)}
-            onSave={handleSaveEditedSite}
-          />
-        )}
+          {editingSite && (
+            <EditSiteModal
+              site={editingSite}
+              onClose={() => setEditingSite(null)}
+              onSave={handleSaveEditedSite}
+            />
+          )}
 
-        {showAddSiteModal && (
-          <AddSiteModal
-            onClose={() => setShowAddSiteModal(false)}
-            onAddSite={handleAddSite}
-          />
-        )}
+          {showAddSiteModal && (
+            <AddSiteModal
+              onClose={() => setShowAddSiteModal(false)}
+              onAddSite={handleAddSite}
+            />
+          )}
 
-        {showAddCategoryModal && (
-          <AddCategoryModal
-            onClose={() => setShowAddCategoryModal(false)}
-            onAddCategory={(cat) => {
-              setCategories((prev) => [...prev, cat]);
-              setShowAddCategoryModal(false);
-              showToast(`Kategori "${cat.title}" berhasil dibuat`);
-            }}
-          />
-        )}
+          {showAddCategoryModal && (
+            <AddCategoryModal
+              onClose={() => setShowAddCategoryModal(false)}
+              onAddCategory={(cat) => {
+                setCategories((prev) => [...prev, cat]);
+                setShowAddCategoryModal(false);
+                showToast(`Kategori "${cat.title}" berhasil dibuat`);
+              }}
+            />
+          )}
 
-        {showWhatsAppModal && currentCategory && (
-          <WhatsAppModal
-            category={currentCategory}
-            onClose={() => setShowWhatsAppModal(false)}
-          />
-        )}
+          {showWhatsAppModal && currentCategory && (
+            <WhatsAppModal
+              category={currentCategory}
+              onClose={() => setShowWhatsAppModal(false)}
+            />
+          )}
 
-        {showExportModal && currentCategory && (
-          <ExportModal
-            category={currentCategory}
-            onClose={() => setShowExportModal(false)}
-          />
-        )}
+          {showExportModal && currentCategory && (
+            <ExportModal
+              category={currentCategory}
+              onClose={() => setShowExportModal(false)}
+            />
+          )}
 
-        {showUserManagement && (
-          <UserManagementModal
-            users={users}
-            currentUser={currentUser}
-            invites={invites}
-            onClose={() => setShowUserManagement(false)}
-            onAddUser={(partialUser) => {
-              const newUser: User = {
-                id: `usr-${Date.now()}`,
-                name: partialUser.name || 'Anggota Baru',
-                email: partialUser.email,
-                role: partialUser.role || 'user',
-                avatar: partialUser.avatar || '/logo.png',
-                status: 'active',
-                isOnline: false,
-              };
-              handleAddUser(newUser);
-            }}
-            onUpdateUser={handleUpdateUser}
-            onDeleteUser={(userId) => {
-              handleDeleteUser(userId);
-            }}
-            onCreateInvite={handleCreateInvite}
-          />
-        )}
+          {showUserManagement && (
+            <UserManagementModal
+              users={users}
+              currentUser={currentUser}
+              invites={invites}
+              onClose={() => setShowUserManagement(false)}
+              onAddUser={(partialUser) => {
+                const newUser: User = {
+                  id: `usr-${Date.now()}`,
+                  name: partialUser.name || 'Anggota Baru',
+                  email: partialUser.email,
+                  role: partialUser.role || 'user',
+                  avatar: partialUser.avatar || '/logo.png',
+                  status: 'active',
+                  isOnline: false,
+                };
+                handleAddUser(newUser);
+              }}
+              onUpdateUser={handleUpdateUser}
+              onDeleteUser={(userId) => {
+                handleDeleteUser(userId);
+              }}
+              onCreateInvite={handleCreateInvite}
+            />
+          )}
 
-        {showAccountSettings && (
-          <AccountSettingsModal
-            currentUser={currentUser}
-            onClose={() => setShowAccountSettings(false)}
-            onLogout={handleLogout}
-            onUpdateProfile={(updated) => {
-              const u = { ...currentUser, ...updated };
-              setCurrentUser(u);
-              saveSession(u);
-              setUsers((prev) => prev.map((x) => (x.id === u.id ? u : x)));
-            }}
-          />
-        )}
+          {showAccountSettings && (
+            <AccountSettingsModal
+              currentUser={currentUser}
+              onClose={() => setShowAccountSettings(false)}
+              onLogout={handleLogout}
+              onUpdateProfile={(updated) => {
+                const u = { ...currentUser, ...updated };
+                setCurrentUser(u);
+                saveSession(u);
+                setUsers((prev) => prev.map((x) => (x.id === u.id ? u : x)));
+              }}
+            />
+          )}
 
-        {showInviteModal && (
-          <InviteModal
-            onClose={() => setShowInviteModal(false)}
-            onCreateInvite={handleCreateInvite}
-          />
-        )}
+          {showInviteModal && (
+            <InviteModal
+              onClose={() => setShowInviteModal(false)}
+              onCreateInvite={handleCreateInvite}
+            />
+          )}
 
-        {deleteModalState && (
-          <ConfirmDeleteModal
-            type={deleteModalState.type}
-            site={deleteModalState.site}
-            category={deleteModalState.category}
-            categoryTitle={deleteModalState.category?.title}
-            onClose={() => setDeleteModalState(null)}
-            onConfirm={handleConfirmDelete}
-          />
-        )}
+          {deleteModalState && (
+            <ConfirmDeleteModal
+              type={deleteModalState.type}
+              site={deleteModalState.site}
+              category={deleteModalState.category}
+              categoryTitle={deleteModalState.category?.title}
+              onClose={() => setDeleteModalState(null)}
+              onConfirm={handleConfirmDelete}
+            />
+          )}
+
+          {showGoogleDriveModal && (
+            <GoogleDriveModal
+              currentUser={currentUser}
+              categories={categories}
+              onClose={() => setShowGoogleDriveModal(false)}
+              onImportSitesFromDrive={handleImportSitesFromDrive}
+              onShowToast={showToast}
+            />
+          )}
+        </React.Suspense>
       </div>
     </PullToRefresh>
   );

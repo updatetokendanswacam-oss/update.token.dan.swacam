@@ -159,7 +159,9 @@ export const INITIAL_CATEGORIES: UpdateCategory[] = [
           '0694-0057-9935-5566-9177',
           '4883-3281-0673-1088-7723',
           '4592-0662-1913-4727-4940'
-        ]
+        ],
+        updatedAt: '2026-10-23T06:30:00.000Z',
+        updatedBy: 'Petugas'
       },
       {
         id: 'm2',
@@ -170,7 +172,9 @@ export const INITIAL_CATEGORIES: UpdateCategory[] = [
         tokens: [
           '3414-4270-4674-4895-1323',
           '0855-3835-0869-4010-4460'
-        ]
+        ],
+        updatedAt: '2026-10-23T06:35:00.000Z',
+        updatedBy: 'Petugas'
       },
       {
         id: 'm3',
@@ -181,7 +185,9 @@ export const INITIAL_CATEGORIES: UpdateCategory[] = [
         tokens: [
           '1662-9428-8705-0034-1303',
           '2707-7092-8863-8300-2428'
-        ]
+        ],
+        updatedAt: '2026-10-23T06:40:00.000Z',
+        updatedBy: 'Petugas'
       },
       {
         id: 'm4',
@@ -192,7 +198,9 @@ export const INITIAL_CATEGORIES: UpdateCategory[] = [
         tokens: [
           '3115-6424-5771-5814-2746',
           '7351-7828-2974-3713-5630'
-        ]
+        ],
+        updatedAt: '2026-10-23T06:45:00.000Z',
+        updatedBy: 'Petugas'
       },
       {
         id: 'm5',
@@ -203,7 +211,9 @@ export const INITIAL_CATEGORIES: UpdateCategory[] = [
         tokens: [
           '5105-3636-5375-1622-4356',
           '7098-1295-5676-4391-7297'
-        ]
+        ],
+        updatedAt: '2026-10-23T06:50:00.000Z',
+        updatedBy: 'Petugas'
       },
       {
         id: 'm6',
@@ -214,7 +224,9 @@ export const INITIAL_CATEGORIES: UpdateCategory[] = [
         tokens: [
           '3443-7752-5217-6499-9426',
           '4929-3442-8912-0354-8906'
-        ]
+        ],
+        updatedAt: '2026-10-23T06:55:00.000Z',
+        updatedBy: 'Petugas'
       }
     ]
   },

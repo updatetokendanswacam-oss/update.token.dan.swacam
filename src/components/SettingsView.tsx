@@ -13,10 +13,12 @@ import {
   RotateCw,
   AlertTriangle,
   RotateCcw,
-  Layers
+  Layers,
+  HardDrive
 } from 'lucide-react';
 import { User, UpdateCategory, InviteLink } from '../types';
 import { InstallPWAButton } from './InstallPWAButton';
+import { TeamStatusRoster } from './TeamStatusRoster';
 
 interface SettingsViewProps {
   currentUser: User;
@@ -28,6 +30,7 @@ interface SettingsViewProps {
   onOpenInviteModal: () => void;
   onOpenExportModal: () => void;
   onOpenAddCategoryModal: () => void;
+  onOpenGoogleDrive?: () => void;
   onLogout: (forgetDevice?: boolean) => void;
   onResetData: () => void;
   onRefresh: () => void;
@@ -35,7 +38,7 @@ interface SettingsViewProps {
   isRefreshing?: boolean;
 }
 
-export const SettingsView: React.FC<SettingsViewProps> = ({
+export const SettingsView: React.FC<SettingsViewProps> = React.memo(({
   currentUser,
   users,
   categories,
@@ -45,6 +48,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   onOpenInviteModal,
   onOpenExportModal,
   onOpenAddCategoryModal,
+  onOpenGoogleDrive,
   onLogout,
   onResetData,
   onRefresh,
@@ -261,6 +265,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         )}
       </div>
 
+      {/* Status Tim Terdaftar (Live Roster - Khusus di Halaman Pengaturan) */}
+      <TeamStatusRoster users={users} />
+
       {/* Section 3: Pengaturan Periode & Data */}
       <div className="bg-white rounded-3xl border border-slate-200/90 p-5 sm:p-7 shadow-xs">
         <h3 className="text-base font-bold text-[#1e2238] flex items-center gap-2 mb-2">
@@ -302,6 +309,17 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             <p className="font-bold text-xs sm:text-sm text-[#1e2238]">Backup Data JSON</p>
             <p className="text-[11px] text-slate-500 mt-0.5">Cadangkan seluruh basis data</p>
           </button>
+
+          {onOpenGoogleDrive && (
+            <button
+              onClick={onOpenGoogleDrive}
+              className="p-4 rounded-2xl border border-blue-200/90 bg-blue-50/60 hover:bg-blue-100/60 text-left transition cursor-pointer group"
+            >
+              <HardDrive className="w-5 h-5 text-blue-600 mb-2 group-hover:scale-105 transition-transform" />
+              <p className="font-bold text-xs sm:text-sm text-blue-950">File Explorer & Google Drive</p>
+              <p className="text-[11px] text-blue-700 mt-0.5 truncate font-mono">ID: 10SRjggSklTu...</p>
+            </button>
+          )}
         </div>
 
         {/* Reset Demo Data Button (Admin Only) */}
@@ -321,24 +339,41 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         )}
       </div>
 
-      {/* Section 4: Aplikasi PWA Standalone */}
-      <div className="bg-white rounded-3xl border border-slate-200/90 p-5 sm:p-7 shadow-xs">
-        <h3 className="text-base font-bold text-[#1e2238] flex items-center gap-2 mb-2">
-          <Smartphone className="w-5 h-5 text-emerald-600" />
-          <span>Aplikasi Progressive Web App (PWA)</span>
-        </h3>
-        <p className="text-xs text-slate-500 mb-4">
+      {/* Section 4: Download Web App DEPOTEL (PWA) */}
+      <div className="bg-white rounded-3xl border border-slate-200/90 p-5 sm:p-7 shadow-xs space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-base font-bold text-[#1e2238] flex items-center gap-2">
+            <Smartphone className="w-5 h-5 text-blue-600" />
+            <span>Download Aplikasi Web DEPOTEL (PWA)</span>
+          </h3>
+          <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 uppercase">
+            Aplikasi Resmi
+          </span>
+        </div>
+        <p className="text-xs text-slate-500">
           Pasang DEPOTEL langsung ke layar utama Android, iPhone, tablet, maupun laptop tanpa perlu membuka browser berulang kali.
         </p>
 
-        <div className="p-4 rounded-2xl bg-[#eeeffa] border border-[#e2e4f7] flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div>
-            <p className="text-xs font-extrabold text-[#1e2238]">Instalasi Cepat & Offline Support</p>
-            <p className="text-[11px] text-slate-600 mt-0.5">
-              Mendukung mode standalone seperti aplikasi native dan dokumentasi foto tersimpan permanen.
-            </p>
+        {/* Card Download Web App with DEPOTEL Logo */}
+        <div className="p-4 sm:p-5 rounded-2xl bg-[#eeeffa] border border-[#e2e4f7] flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-3.5 sm:gap-4 w-full sm:w-auto">
+            <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-white p-1 border border-slate-200 shadow-sm shrink-0 flex items-center justify-center">
+              <img
+                src="/logo.png"
+                alt="DEPOTEL GROUP"
+                className="w-full h-full object-contain"
+              />
+            </div>
+            <div>
+              <p className="text-xs sm:text-sm font-extrabold text-[#1e2238]">DEPOTEL GROUP - UPDATE TOKEN & SWACAM</p>
+              <p className="text-[11px] text-slate-600 mt-0.5 leading-relaxed">
+                Mendukung mode standalone native HP, akses offline, dan penyimpanan foto GPS permanen.
+              </p>
+            </div>
           </div>
-          <InstallPWAButton variant="primary" />
+          <div className="w-full sm:w-auto shrink-0 flex justify-end">
+            <InstallPWAButton variant="primary" />
+          </div>
         </div>
       </div>
 
@@ -437,4 +472,4 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       )}
     </div>
   );
-};
+});

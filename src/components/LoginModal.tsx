@@ -42,11 +42,11 @@ export const LoginModal: React.FC<LoginModalProps> = ({
       <div className="relative w-full max-w-md rounded-3xl bg-white border border-slate-200/90 shadow-xl p-6 sm:p-8 text-slate-800 my-auto">
         {/* Brand Header */}
         <div className="text-center pb-5 border-b border-slate-100">
-          <div className="inline-flex p-1.5 rounded-2xl bg-white shadow-md border border-slate-200 mb-2">
+          <div className="inline-flex p-2 rounded-3xl bg-white shadow-lg border border-slate-200/90 mb-3">
             <img
               src="/logo.png"
               alt="DEPOTEL GROUP"
-              className="w-16 h-16 sm:w-20 sm:h-20 object-contain"
+              className="w-20 h-20 sm:w-24 sm:h-24 object-contain aspect-square"
             />
           </div>
           <p className="text-[11px] font-black tracking-widest text-red-600 uppercase">
