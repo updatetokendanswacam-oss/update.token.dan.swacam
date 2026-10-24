@@ -89,6 +89,7 @@ export default function App() {
   // Site Actions
   const [editingSite, setEditingSite] = useState<SiteItem | null>(null);
   const [cameraSite, setCameraSite] = useState<SiteItem | null>(null);
+  const [cameraCategory, setCameraCategory] = useState<UpdateCategory | null>(null);
   const [viewingPhoto, setViewingPhoto] = useState<{ site: SiteItem; index: number } | null>(null);
   const [deleteModalState, setDeleteModalState] = useState<{
     type: 'site' | 'category';
@@ -895,7 +896,10 @@ export default function App() {
                   onDeleteSite={handleDeleteSite}
                   onAddToken={handleAddToken}
                   onRemoveToken={handleRemoveToken}
-                  onOpenCamera={(s) => setCameraSite(s)}
+                  onOpenCamera={(s) => {
+                    setCameraSite(s);
+                    setCameraCategory(currentCategory);
+                  }}
                   onViewPhoto={(s, idx) => setViewingPhoto({ site: s, index: idx })}
                 />
               ) : null
@@ -998,8 +1002,13 @@ export default function App() {
           {cameraSite && (
             <CameraModal
               site={cameraSite}
+              category={cameraCategory || currentCategory}
+              categoryTitle={(cameraCategory || currentCategory)?.title}
               currentUser={currentUser}
-              onClose={() => setCameraSite(null)}
+              onClose={() => {
+                setCameraSite(null);
+                setCameraCategory(null);
+              }}
               onSavePhoto={handleSavePhoto}
             />
           )}

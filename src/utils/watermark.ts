@@ -1,13 +1,55 @@
 /**
- * Adds official DEPOTEL operational watermark with Site ID, Site Name, Meter ID, Timestamp & Operator
+ * Resolves the official operational brand watermark title based on the active list / category:
+ * - List "Pengisian Token Listrik Manual – DEPOTEL" -> "DEPOTEL GROUP - TOKEN MANUAL"
+ * - List "Update Swacam/Catat Meter – DEPOTEL" -> "DEPOTEL GROUP - SWACAM"
+ */
+export function getPhotoWatermarkBrand(categoryTitleOrType?: string): string {
+  if (!categoryTitleOrType) return 'DEPOTEL GROUP - SWACAM';
+  const lower = categoryTitleOrType.toLowerCase();
+
+  // Specifically check for Token Manual list
+  if (
+    lower.includes('token manual') ||
+    lower.includes('token listrik manual') ||
+    lower.includes('pengisian token') ||
+    lower === 'token_manual'
+  ) {
+    return 'DEPOTEL GROUP - TOKEN MANUAL';
+  }
+
+  // Specifically check for Swacam / Catat Meter list
+  if (
+    lower.includes('swacam') ||
+    lower.includes('catat meter') ||
+    lower === 'swacam'
+  ) {
+    return 'DEPOTEL GROUP - SWACAM';
+  }
+
+  // Fallback for any other token list
+  if (lower.includes('token')) {
+    return 'DEPOTEL GROUP - TOKEN MANUAL';
+  }
+
+  return 'DEPOTEL GROUP - SWACAM';
+}
+
+/**
+ * Adds official DEPOTEL operational watermark with Site ID, Site Name, Meter ID, Timestamp & Operator.
+ * The brand header dynamically reflects the active list:
+ * - "DEPOTEL GROUP - TOKEN MANUAL" for Pengisian Token Listrik Manual – DEPOTEL
+ * - "DEPOTEL GROUP - SWACAM" for Update Swacam/Catat Meter – DEPOTEL
  */
 export async function addDepotelWatermark(
   imageSource: File | Blob | string,
   siteId: string,
   siteName: string,
   meterId: string,
-  operatorName: string
-): Promise<{ dataUrl: string; formattedTime: string }> {
+  operatorName: string,
+  categoryTitleOrType?: string
+): Promise<{ dataUrl: string; formattedTime: string; brandTitle: string }> {
+  const brandTitle = getPhotoWatermarkBrand(categoryTitleOrType);
+
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.crossOrigin = 'anonymous';
@@ -69,10 +111,10 @@ export async function addDepotelWatermark(
         const paddingLeft = Math.max(20 * scale, 16);
         let currentY = bannerY + (24 * scale);
 
-        // Line 1: Header Brand
+        // Line 1: Header Brand (Dynamic based on active list: DEPOTEL GROUP - TOKEN MANUAL or DEPOTEL GROUP - SWACAM)
         ctx.font = `bold ${titleFontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
         ctx.fillStyle = '#FFFFFF';
-        ctx.fillText('⚡ DEPOTEL GROUP - CATAT METER & TOKEN KWH', paddingLeft, currentY);
+        ctx.fillText(brandTitle, paddingLeft, currentY);
 
         // Line 2: Site ID & Site Name
         currentY += (24 * scale);
@@ -94,7 +136,7 @@ export async function addDepotelWatermark(
         ctx.fillText(`🕒 Waktu Pengambilan: ${fullTimeString}`, paddingLeft, currentY);
 
         const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
-        resolve({ dataUrl, formattedTime: fullTimeString });
+        resolve({ dataUrl, formattedTime: fullTimeString, brandTitle });
       } catch (err) {
         reject(err);
       }

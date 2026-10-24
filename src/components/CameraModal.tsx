@@ -1,10 +1,12 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Camera, Upload, X, Check, RefreshCw, AlertCircle } from 'lucide-react';
-import { SiteItem, User, PhotoRecord } from '../types';
-import { addDepotelWatermark } from '../utils/watermark';
+import { SiteItem, User, PhotoRecord, UpdateCategory } from '../types';
+import { addDepotelWatermark, getPhotoWatermarkBrand } from '../utils/watermark';
 
 interface CameraModalProps {
   site: SiteItem;
+  category?: UpdateCategory | null;
+  categoryTitle?: string;
   currentUser: User | null;
   onClose: () => void;
   onSavePhoto: (siteId: string, photo: PhotoRecord) => void;
@@ -12,6 +14,8 @@ interface CameraModalProps {
 
 export const CameraModal: React.FC<CameraModalProps> = ({
   site,
+  category,
+  categoryTitle,
   currentUser,
   onClose,
   onSavePhoto,
@@ -19,12 +23,16 @@ export const CameraModal: React.FC<CameraModalProps> = ({
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [useLiveCamera, setUseLiveCamera] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
-  const [previewWatermarked, setPreviewWatermarked] = useState<{ dataUrl: string; formattedTime: string } | null>(null);
+  const [previewWatermarked, setPreviewWatermarked] = useState<{ dataUrl: string; formattedTime: string; brandTitle: string } | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const directCameraInputRef = useRef<HTMLInputElement | null>(null);
   const galleryInputRef = useRef<HTMLInputElement | null>(null);
+
+  const brandTitle = useMemo(() => {
+    return getPhotoWatermarkBrand(category?.title || categoryTitle || category?.type);
+  }, [category, categoryTitle]);
 
   // Stop camera when closing
   useEffect(() => {
@@ -79,7 +87,8 @@ export const CameraModal: React.FC<CameraModalProps> = ({
           site.siteId,
           site.siteName,
           site.meterId,
-          currentUser?.name || 'Petugas'
+          currentUser?.name || 'Petugas',
+          brandTitle
         );
         setPreviewWatermarked(watermarked);
         stopCamera();
@@ -102,7 +111,8 @@ export const CameraModal: React.FC<CameraModalProps> = ({
         site.siteId,
         site.siteName,
         site.meterId,
-        currentUser?.name || 'Petugas'
+        currentUser?.name || 'Petugas',
+        brandTitle
       );
       setPreviewWatermarked(watermarked);
     } catch (err) {
@@ -137,6 +147,11 @@ export const CameraModal: React.FC<CameraModalProps> = ({
         {/* Header */}
         <div className="flex items-center justify-between pb-3 border-b border-slate-800">
           <div>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30 uppercase tracking-wider">
+                {brandTitle}
+              </span>
+            </div>
             <h3 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
               <Camera className="w-5 h-5 text-blue-400" />
               <span>Dokumentasi Foto KWh Meter</span>
@@ -161,7 +176,7 @@ export const CameraModal: React.FC<CameraModalProps> = ({
           {isProcessing ? (
             <div className="py-12 flex flex-col items-center justify-center gap-3">
               <RefreshCw className="w-8 h-8 text-blue-400 animate-spin" />
-              <p className="text-sm font-semibold text-slate-300">Menempelkan Watermark DEPOTEL Resmi...</p>
+              <p className="text-sm font-semibold text-slate-300">Menempelkan Watermark {brandTitle}...</p>
               <p className="text-xs text-slate-400">Site ID, Meter ID, Tanggal & Jam WIB</p>
             </div>
           ) : previewWatermarked ? (
@@ -170,14 +185,14 @@ export const CameraModal: React.FC<CameraModalProps> = ({
               <div className="relative rounded-2xl overflow-hidden border border-blue-500/40 bg-black">
                 <img
                   src={previewWatermarked.dataUrl}
-                  alt="Preview Watermark"
+                  alt={`Preview Watermark ${brandTitle}`}
                   className="w-full max-h-[50vh] object-contain mx-auto"
                 />
               </div>
               <div className="p-3 rounded-xl bg-blue-950/40 border border-blue-800/50 text-xs text-blue-200">
                 <p className="font-semibold text-emerald-400 flex items-center gap-1.5">
                   <Check className="w-4 h-4" />
-                  <span>Foto berhasil distempel dengan data resmi:</span>
+                  <span>Foto berhasil distempel ({brandTitle}):</span>
                 </p>
                 <p className="mt-1 text-slate-300">
                   Waktu: <strong>{previewWatermarked.formattedTime}</strong>
