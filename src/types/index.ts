@@ -39,6 +39,7 @@ export interface UpdateCategory {
   title: string;       // e.g. "Pengisian Token Listrik - DEPOTEL"
   period: string;      // e.g. "Bulan September 2026"
   type: 'token' | 'swacam' | 'token_manual' | 'custom';
+  customTypeName?: string; // Tipe atau nama kategori kustom yang diketik pengguna
   sites: SiteItem[];
   allowCamera: boolean;
   allowTokenInput: boolean;

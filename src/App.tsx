@@ -39,7 +39,7 @@ import { CategoryDetailView } from './components/CategoryDetailView';
 import { SettingsView } from './components/SettingsView';
 import { LoginModal } from './components/LoginModal';
 import { PullToRefresh } from './components/PullToRefresh';
-import { Home, Settings } from 'lucide-react';
+import { Home, Settings, RefreshCw, X } from 'lucide-react';
 
 // Code-split heavy modals with React.lazy
 const CameraModal = React.lazy(() => import('./components/CameraModal').then((m) => ({ default: m.CameraModal })));
@@ -104,15 +104,9 @@ export default function App() {
   // Invite code detection in URL
   const [inviteCodeFromUrl, setInviteCodeFromUrl] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search);
-      const invite = params.get('invite');
-      if (invite) {
-        setInviteCodeFromUrl(invite);
-      }
-    }
-  }, []);
+  // Real-time Service Worker update detection for smooth Vercel deployments
+  const [hasUpdateAvailable, setHasUpdateAvailable] = useState(false);
+  const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
 
   // Real-time synchronization of authenticated Firebase user and verified role
   useEffect(() => {
@@ -176,6 +170,82 @@ export default function App() {
     }, 3000);
     return () => clearTimeout(t);
   }, []);
+
+  const checkForAppUpdate = useCallback(async (manual = false) => {
+    if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+      if (manual) setIsCheckingUpdate(true);
+      try {
+        const reg = await navigator.serviceWorker.getRegistration();
+        if (reg) {
+          await reg.update();
+          if (reg.waiting || reg.installing) {
+            setHasUpdateAvailable(true);
+            if (manual) showToast('Versi baru ditemukan dan siap diterapkan!');
+          } else if (manual) {
+            showToast('Aplikasi sudah menggunakan versi terbaru dari Vercel');
+          }
+        } else if (manual) {
+          showToast('Aplikasi berjalan dengan versi terbaru');
+        }
+      } catch (err) {
+        console.warn('Update check error:', err);
+        if (manual) showToast('Gagal memeriksa pembaruan: Periksa koneksi internet');
+      } finally {
+        if (manual) setIsCheckingUpdate(false);
+      }
+    } else if (manual) {
+      showToast('Browser tidak mendukung Service Worker');
+    }
+  }, [showToast]);
+
+  const handleApplyUpdate = useCallback(async () => {
+    if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+      try {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        for (const r of regs) {
+          if (r.waiting) {
+            r.waiting.postMessage({ type: 'SKIP_WAITING' });
+          }
+        }
+      } catch (e) {
+        console.warn('Skip waiting error:', e);
+      }
+    }
+    window.location.reload();
+  }, []);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistration().then((reg) => {
+        if (!reg) return;
+
+        // Auto-check on initialization
+        reg.update().catch(() => {});
+
+        reg.addEventListener('updatefound', () => {
+          const newWorker = reg.installing;
+          if (!newWorker) return;
+          newWorker.addEventListener('statechange', () => {
+            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+              setHasUpdateAvailable(true);
+            }
+          });
+        });
+      });
+
+      // Check on tab focus / visibility
+      const handleVisibilityChange = () => {
+        if (document.visibilityState === 'visible') {
+          checkForAppUpdate(false);
+        }
+      };
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+
+      return () => {
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+      };
+    }
+  }, [checkForAppUpdate]);
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -942,6 +1012,8 @@ export default function App() {
                 onResetData={handleResetData}
                 onRefresh={handleRefresh}
                 onSwitchUser={handleSelectUser}
+                onCheckForUpdate={() => checkForAppUpdate(true)}
+                isCheckingUpdate={isCheckingUpdate}
                 isRefreshing={isRefreshing}
               />
             )}
@@ -988,6 +1060,39 @@ export default function App() {
             <span>Pengaturan</span>
           </button>
         </nav>
+
+        {/* Vercel Deployment New Version Notification Banner */}
+        {hasUpdateAvailable && (
+          <aside
+            aria-label="Notifikasi Pembaruan Aplikasi"
+            className="fixed top-4 left-4 right-4 sm:left-auto sm:right-6 sm:max-w-sm z-60 bg-[#1e2238] border border-blue-400 text-white p-3.5 rounded-2xl shadow-2xl flex items-center justify-between gap-3 animate-in slide-in-from-top-4"
+          >
+            <div className="flex items-center gap-2.5 min-w-0">
+              <span className="w-2.5 h-2.5 rounded-full bg-blue-400 animate-ping shrink-0" />
+              <div className="min-w-0">
+                <p className="text-xs font-bold text-white truncate">Versi Baru Tersedia</p>
+                <p className="text-[11px] text-slate-300 leading-tight">Pembaruan telah dipublikasikan di Vercel.</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                type="button"
+                onClick={handleApplyUpdate}
+                className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition cursor-pointer flex items-center gap-1"
+              >
+                <RefreshCw className="w-3 h-3" />
+                <span>Perbarui</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setHasUpdateAvailable(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-white transition cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </aside>
+        )}
 
         {/* Floating Toast Notification */}
         {toastMessage && (

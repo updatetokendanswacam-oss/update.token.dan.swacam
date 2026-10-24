@@ -35,6 +35,8 @@ interface SettingsViewProps {
   onResetData: () => void;
   onRefresh: () => void;
   onSwitchUser?: (user: User) => void;
+  onCheckForUpdate?: () => void;
+  isCheckingUpdate?: boolean;
   isRefreshing?: boolean;
 }
 
@@ -53,6 +55,8 @@ export const SettingsView: React.FC<SettingsViewProps> = React.memo(({
   onResetData,
   onRefresh,
   onSwitchUser,
+  onCheckForUpdate,
+  isCheckingUpdate = false,
   isRefreshing = false,
 }) => {
   const [avatarPreview, setAvatarPreview] = useState(currentUser.avatar || '/logo.png');
@@ -377,7 +381,46 @@ export const SettingsView: React.FC<SettingsViewProps> = React.memo(({
         </div>
       </div>
 
-      {/* Section 5: Keluar Akun */}
+      {/* Section 5: Status Pembaruan WebApp & Sinkronisasi Vercel */}
+      <div className="bg-white rounded-3xl border border-slate-200/90 p-5 sm:p-7 shadow-xs space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-base font-bold text-[#1e2238] flex items-center gap-2">
+            <RotateCw className="w-5 h-5 text-blue-600" />
+            <span>Pembaruan Otomatis WebApp (Vercel)</span>
+          </h3>
+          <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 uppercase">
+            Live Deployment
+          </span>
+        </div>
+        <p className="text-xs text-slate-500">
+          Sistem secara otomatis mendeteksi setiap rilis pembaruan baru dari Vercel tanpa perlu menghapus cache secara manual.
+        </p>
+
+        <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/90 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div className="space-y-0.5">
+            <p className="text-xs font-bold text-[#1e2238] flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block animate-pulse" />
+              <span>Sinkronisasi Otomatis Vercel Aktif</span>
+            </p>
+            <p className="text-[11px] text-slate-500">
+              Setiap perubahan kode yang dideploy ke Vercel langsung disajikan ke browser pengguna tanpa cache tertahan.
+            </p>
+          </div>
+          {onCheckForUpdate && (
+            <button
+              type="button"
+              onClick={onCheckForUpdate}
+              disabled={isCheckingUpdate}
+              className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shrink-0"
+            >
+              <RotateCw className={`w-3.5 h-3.5 ${isCheckingUpdate ? 'animate-spin' : ''}`} />
+              <span>{isCheckingUpdate ? 'Memeriksa...' : 'Periksa Pembaruan'}</span>
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Section 6: Keluar Akun */}
       <div className="bg-white rounded-3xl border border-red-100 p-5 sm:p-7 shadow-xs">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
           <div>

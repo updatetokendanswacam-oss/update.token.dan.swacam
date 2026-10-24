@@ -38,7 +38,15 @@ const CategoryCardItem: React.FC<CategoryCardItemProps> = React.memo(({
   );
 
   const isSwacam = category.type === 'swacam';
-  const badgeText = isSwacam ? 'SWACAM / CATAT METER' : 'TOKEN LISTRIK';
+  const isTokenManual = category.type === 'token_manual';
+  const isCustom = category.type === 'custom';
+  const badgeText = isSwacam
+    ? 'SWACAM / CATAT METER'
+    : isTokenManual
+    ? 'TOKEN LISTRIK MANUAL'
+    : isCustom
+    ? (category.customTypeName ? `+ ${category.customTypeName.toUpperCase()}` : '+ KATEGORI KUSTOM')
+    : 'TOKEN LISTRIK';
 
   const handleStartEditCount = (e: React.MouseEvent) => {
     e.stopPropagation();
