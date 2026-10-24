@@ -491,3 +491,59 @@ export function saveTokenConfig(config: TokenSystemConfig): void {
   }
 }
 
+// ==========================================
+// NAME-BASED TYPED LOGIN PERSISTENCE (3x auto-save)
+// ==========================================
+const LOGIN_COUNTS_KEY = 'depotel_login_counts_v1';
+const SAVED_OFFICERS_KEY = 'depotel_saved_officers_v1';
+
+export function getLoginCounts(): Record<string, number> {
+  try {
+    const raw = localStorage.getItem(LOGIN_COUNTS_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+export function getNameLoginCount(name: string): number {
+  if (!name || !name.trim()) return 0;
+  const counts = getLoginCounts();
+  return counts[name.trim().toLowerCase()] || 0;
+}
+
+export function recordNameLogin(name: string): { count: number; isSaved: boolean; wasAlreadySaved: boolean } {
+  const cleanName = name.trim();
+  const normalizedKey = cleanName.toLowerCase();
+  const counts = getLoginCounts();
+  const previousCount = counts[normalizedKey] || 0;
+  const newCount = previousCount + 1;
+  counts[normalizedKey] = newCount;
+
+  try {
+    localStorage.setItem(LOGIN_COUNTS_KEY, JSON.stringify(counts));
+  } catch {}
+
+  const saved = getSavedOfficerNames();
+  const wasAlreadySaved = saved.some((n) => n.toLowerCase() === normalizedKey);
+  const isSaved = newCount >= 3;
+
+  if (isSaved && !wasAlreadySaved) {
+    saved.push(cleanName);
+    try {
+      localStorage.setItem(SAVED_OFFICERS_KEY, JSON.stringify(saved));
+    } catch {}
+  }
+
+  return { count: newCount, isSaved, wasAlreadySaved };
+}
+
+export function getSavedOfficerNames(): string[] {
+  try {
+    const raw = localStorage.getItem(SAVED_OFFICERS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+

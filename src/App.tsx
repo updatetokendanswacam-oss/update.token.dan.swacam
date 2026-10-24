@@ -11,6 +11,7 @@ import {
   saveInvites,
   savePhotoToDB,
   deletePhotoFromDB,
+  recordNameLogin,
 } from './utils/storage';
 import {
   User,
@@ -190,8 +191,56 @@ export default function App() {
     [categories, selectedCategoryId]
   );
 
-  // User Authentication Handlers
+  // User Authentication Handlers (Ketik nama & auto-save setelah 3x masuk)
+  const handleTypedLogin = (typedName: string) => {
+    const cleanName = typedName.trim();
+    if (!cleanName) return;
+
+    let existingUser = users.find(
+      (u) => u.name.toLowerCase() === cleanName.toLowerCase()
+    );
+
+    const { count, isSaved, wasAlreadySaved } = recordNameLogin(cleanName);
+
+    let loggedInUser: User;
+    if (existingUser) {
+      loggedInUser = existingUser;
+    } else {
+      const isAdmin =
+        cleanName.toLowerCase().includes('admin') || cleanName.toLowerCase() === 'diki solihin';
+      loggedInUser = {
+        id: `usr-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        name: cleanName,
+        role: isAdmin ? 'admin' : 'user',
+        avatar: '/logo.png',
+        status: 'active',
+        isOnline: true,
+        lastSeen: new Date().toISOString(),
+      };
+
+      if (isSaved) {
+        setUsers((prev) => {
+          const updated = [...prev, loggedInUser];
+          saveUsers(updated);
+          return updated;
+        });
+      }
+    }
+
+    setCurrentUser(loggedInUser);
+    saveSession(loggedInUser);
+
+    if (isSaved && !wasAlreadySaved) {
+      showToast(`🎉 Selamat! Nama "${cleanName}" telah masuk 3x dan resmi tersimpan permanen!`);
+    } else if (isSaved) {
+      showToast(`Masuk sebagai ${cleanName} (Nama Tersimpan)`);
+    } else {
+      showToast(`Masuk sebagai ${cleanName} (${count}/3x untuk simpan otomatis)`);
+    }
+  };
+
   const handleSelectUser = (user: User) => {
+    recordNameLogin(user.name);
     setCurrentUser(user);
     saveSession(user);
     showToast(`Masuk sebagai ${user.name}`);
@@ -712,10 +761,10 @@ export default function App() {
       <LoginModal
         users={users}
         inviteCode={inviteCodeFromUrl}
-        onLogin={handleSelectUser}
+        onLogin={handleTypedLogin}
         onGoogleSignIn={() => {
           const firstAdmin = users.find((u) => u.role === 'admin') || users[0];
-          if (firstAdmin) handleSelectUser(firstAdmin);
+          if (firstAdmin) handleTypedLogin(firstAdmin.name);
         }}
         onRegisterFromInvite={handleRegisterFromInvite}
       />

@@ -1,11 +1,22 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { User, UserRole } from '../types';
-import { Shield, Search, CheckCircle2, UserPlus, ArrowRight, Sparkles } from 'lucide-react';
+import { getNameLoginCount, getLoginCounts, getSavedOfficerNames } from '../utils/storage';
+import {
+  Shield,
+  CheckCircle2,
+  UserPlus,
+  ArrowRight,
+  Sparkles,
+  Lock,
+  UserCheck,
+  Clock,
+  Info
+} from 'lucide-react';
 
 interface LoginModalProps {
   users: User[];
   inviteCode?: string | null;
-  onLogin: (user: User) => void;
+  onLogin: (typedName: string) => void;
   onGoogleSignIn: () => void;
   onRegisterFromInvite?: (name: string, role: UserRole, inviteCode?: string) => void;
 }
@@ -17,20 +28,49 @@ export const LoginModal: React.FC<LoginModalProps> = ({
   onGoogleSignIn,
   onRegisterFromInvite,
 }) => {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [newName, setNewName] = useState('');
-  const [newRole, setNewRole] = useState<UserRole>('user');
+  const [typedName, setTypedName] = useState('');
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const filteredUsers = users.filter((u) =>
-    u.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (u.email && u.email.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  // Invite registration states
+  const [inviteName, setInviteName] = useState('');
+  const [inviteRole, setInviteRole] = useState<UserRole>('user');
+
+  // Real-time login count for current typed name
+  const currentCount = useMemo(() => {
+    return getNameLoginCount(typedName);
+  }, [typedName]);
+
+  const allCounts = useMemo(() => {
+    return getLoginCounts();
+  }, [typedName]);
+
+  const savedOfficerNames = useMemo(() => {
+    return getSavedOfficerNames();
+  }, [typedName]);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMessage(null);
+
+    const clean = typedName.trim();
+    if (!clean) {
+      setErrorMessage('Harap ketik nama Anda terlebih dahulu.');
+      return;
+    }
+
+    if (clean.length < 2) {
+      setErrorMessage('Nama minimal terdiri dari 2 karakter.');
+      return;
+    }
+
+    onLogin(clean);
+  };
 
   const handleRegisterSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newName.trim()) return;
+    if (!inviteName.trim()) return;
     if (onRegisterFromInvite) {
-      onRegisterFromInvite(newName.trim(), newRole, inviteCode || undefined);
+      onRegisterFromInvite(inviteName.trim(), inviteRole, inviteCode || undefined);
     }
   };
 
@@ -53,7 +93,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
             UPDATE TOKEN & SWACAM
           </h2>
           <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
-            Pilih akun petugas atau masuk dengan Google untuk memulai pencatatan dan monitoring
+            Ketik nama Anda untuk masuk ke sistem dashboard operasional
           </p>
 
           {inviteCode && (
@@ -73,19 +113,19 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                 <span>Pendaftaran Anggota Tim Baru</span>
               </p>
               <p className="text-xs text-blue-700/80 mt-1">
-                Masukkan nama Anda untuk langsung terdaftar dalam sistem monitoring DEPOTEL.
+                Ketik nama Anda untuk didaftarkan langsung ke sistem DEPOTEL.
               </p>
             </div>
 
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1">
-                Nama Lengkap Petugas
+                Ketik Nama Lengkap
               </label>
               <input
                 type="text"
                 required
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
+                value={inviteName}
+                onChange={(e) => setInviteName(e.target.value)}
                 placeholder="Contoh: Ahmad Rizki"
                 className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-800 bg-slate-50"
               />
@@ -96,8 +136,8 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                 Peran Akun
               </label>
               <select
-                value={newRole}
-                onChange={(e) => setNewRole(e.target.value as UserRole)}
+                value={inviteRole}
+                onChange={(e) => setInviteRole(e.target.value as UserRole)}
                 className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-800 bg-slate-50"
               >
                 <option value="user">Petugas Lapangan (User)</option>
@@ -109,20 +149,170 @@ export const LoginModal: React.FC<LoginModalProps> = ({
               type="submit"
               className="w-full py-3 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm shadow-md transition active:scale-98 flex items-center justify-center gap-2 cursor-pointer"
             >
-              <span>Bergabung & Mulai Bekerja</span>
+              <span>Daftar & Masuk ke Dashboard</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </form>
         ) : (
-          <>
-            {/* Primary Action: Google Sign In */}
-            <div className="pt-5 pb-3">
+          <div className="pt-5 space-y-4">
+            {/* Error Message */}
+            {errorMessage && (
+              <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold">
+                {errorMessage}
+              </div>
+            )}
+
+            {/* Typing Login Form */}
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-black text-slate-700 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+                  <span>Ketik Nama Anda untuk Masuk</span>
+                  <span className="text-[11px] font-medium text-slate-400 lowercase">
+                    (wajib ketik nama)
+                  </span>
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    required
+                    autoFocus
+                    value={typedName}
+                    onChange={(e) => {
+                      setTypedName(e.target.value);
+                      if (errorMessage) setErrorMessage(null);
+                    }}
+                    placeholder="Ketik nama lengkap atau nama panggilan..."
+                    className="w-full px-4 py-3 rounded-2xl border-2 border-slate-200 hover:border-slate-300 focus:border-blue-600 focus:ring-4 focus:ring-blue-100 text-sm sm:text-base font-semibold text-slate-900 bg-slate-50/50 transition-all outline-none"
+                  />
+                </div>
+
+                {/* Real-time 3x Save Status Banner */}
+                {typedName.trim() ? (
+                  <div className="mt-2.5 p-3 rounded-2xl border transition-all text-xs">
+                    {currentCount >= 3 ? (
+                      <div className="flex items-center gap-2 text-emerald-800 bg-emerald-50 border-emerald-200 p-2 rounded-xl">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                        <div>
+                          <p className="font-bold">✓ Nama Tersimpan Permanen!</p>
+                          <p className="text-[11px] text-emerald-700/90 mt-0.5">
+                            Nama "{typedName.trim()}" telah masuk {currentCount}x dan resmi tersimpan di sistem ini.
+                          </p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 text-blue-900 bg-blue-50/80 border-blue-200 p-2 rounded-xl">
+                        <Clock className="w-4 h-4 text-blue-600 shrink-0" />
+                        <div className="flex-1">
+                          <div className="flex items-center justify-between font-bold text-[11px]">
+                            <span>Progres Simpan Otomatis:</span>
+                            <span className="text-blue-700">{currentCount} / 3x masuk</span>
+                          </div>
+                          {/* Progress bar */}
+                          <div className="w-full h-1.5 bg-blue-200/70 rounded-full mt-1.5 overflow-hidden">
+                            <div
+                              className="h-full bg-blue-600 rounded-full transition-all duration-300"
+                              style={{ width: `${Math.min(100, (currentCount / 3) * 100)}%` }}
+                            />
+                          </div>
+                          <p className="text-[11px] text-blue-700/80 mt-1">
+                            {currentCount === 0
+                              ? 'Masuk 3x dengan nama yang sama untuk otomatis tersimpan permanen.'
+                              : currentCount === 1
+                              ? 'Ketik nama ini 2x lagi saat masuk berikutnya untuk simpan permanen.'
+                              : 'Tinggal 1x masuk lagi agar nama Anda tersimpan permanen!'}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="mt-2 p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-500 text-[11px] flex items-center gap-2">
+                    <Info className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                    <span>
+                      Aturan Sistem: Ketik nama Anda dan masuk <strong>3x berturut-turut</strong> agar nama otomatis tersimpan permanen.
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Enter Dashboard Button */}
+              <button
+                type="submit"
+                className="w-full py-3.5 px-4 rounded-2xl bg-[#1e2238] hover:bg-[#2c3254] text-white font-bold text-sm sm:text-base shadow-lg shadow-slate-900/10 transition active:scale-98 flex items-center justify-center gap-2.5 cursor-pointer"
+              >
+                <span>Masuk ke Dashboard</span>
+                <ArrowRight className="w-4 h-4 text-emerald-400" />
+              </button>
+            </form>
+
+            {/* Read-Only Informational Roster (CANNOT be clicked per instructions) */}
+            <div className="mt-5 pt-4 border-t border-slate-100">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs font-bold text-slate-600 flex items-center gap-1.5">
+                  <Lock className="w-3.5 h-3.5 text-slate-400" />
+                  <span>Daftar Petugas & Status Simpan (Ketik untuk Masuk)</span>
+                </p>
+                <span className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">
+                  Hanya Ketik
+                </span>
+              </div>
+
+              {/* Informational Cards - Read Only (Non-clickable) */}
+              <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                {users.map((user) => {
+                  const isAdmin = user.role === 'admin';
+                  const norm = user.name.trim().toLowerCase();
+                  const count = allCounts[norm] || (isAdmin ? 3 : 0);
+                  const isSaved = count >= 3 || savedOfficerNames.some((n) => n.toLowerCase() === norm);
+
+                  return (
+                    <div
+                      key={user.id}
+                      className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50/80 border border-slate-200/70 select-none text-left cursor-default"
+                      title="Ketik nama ini pada kolom di atas untuk masuk"
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <img
+                          src={user.avatar || '/logo.png'}
+                          alt={user.name}
+                          className="w-7 h-7 rounded-lg object-contain bg-white border border-slate-200 p-0.5 shrink-0"
+                        />
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold text-slate-800 truncate">
+                            {user.name}
+                          </p>
+                          <p className="text-[10px] text-slate-400 truncate">
+                            {isAdmin ? 'Administrator' : 'Petugas Lapangan'}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="shrink-0 flex items-center gap-1.5">
+                        {isSaved ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            <UserCheck className="w-3 h-3 text-emerald-600" />
+                            <span>Tersimpan (≥3x)</span>
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 text-slate-500 border border-slate-200">
+                            <span>{count}/3x masuk</span>
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Quick Google Sign In */}
+            <div className="pt-2">
               <button
                 type="button"
                 onClick={onGoogleSignIn}
-                className="w-full flex items-center justify-center gap-3 py-3 px-4 rounded-2xl bg-white hover:bg-slate-50 border border-slate-300 text-slate-800 font-bold text-sm shadow-xs hover:shadow transition active:scale-98 cursor-pointer group"
+                className="w-full flex items-center justify-center gap-2.5 py-2.5 px-4 rounded-xl bg-slate-100 hover:bg-slate-200/80 text-slate-700 font-semibold text-xs transition cursor-pointer"
               >
-                <svg className="w-5 h-5 shrink-0 group-hover:scale-105 transition-transform" viewBox="0 0 24 24">
+                <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
                   <path
                     fill="#4285F4"
                     d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
@@ -140,88 +330,10 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                     d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
                   />
                 </svg>
-                <span>Masuk dengan Akun Google</span>
+                <span>Masuk Cepat Administrator (Google)</span>
               </button>
             </div>
-
-            {/* Divider */}
-            <div className="relative flex items-center justify-center my-3">
-              <div className="w-full border-t border-slate-200" />
-              <span className="absolute bg-white px-3 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                atau pilih akun terdaftar
-              </span>
-            </div>
-
-            {/* Search Box */}
-            <div className="relative mb-3">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Cari nama petugas atau admin..."
-                className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50/70 text-slate-800"
-              />
-            </div>
-
-            {/* Users List */}
-            <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-              {filteredUsers.length === 0 ? (
-                <div className="text-center py-6 text-slate-400 text-xs">
-                  Tidak ada petugas dengan nama "{searchTerm}"
-                </div>
-              ) : (
-                filteredUsers.map((user) => {
-                  const isAdmin = user.role === 'admin';
-                  return (
-                    <button
-                      key={user.id}
-                      type="button"
-                      onClick={() => onLogin(user)}
-                      className="w-full flex items-center justify-between p-3 rounded-2xl border border-slate-200/90 hover:border-blue-400 bg-slate-50/50 hover:bg-blue-50/40 transition active:scale-98 cursor-pointer text-left group"
-                    >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className="relative shrink-0">
-                          <img
-                            src={user.avatar || '/logo.png'}
-                            alt={user.name}
-                            className="w-10 h-10 rounded-xl object-contain bg-white border border-slate-200 p-0.5"
-                          />
-                          <span
-                            className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white ${
-                              user.isOnline !== false ? 'bg-emerald-500' : 'bg-slate-300'
-                            }`}
-                          />
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-xs sm:text-sm font-bold text-slate-800 truncate group-hover:text-blue-700 transition-colors">
-                            {user.name}
-                          </p>
-                          <p className="text-[11px] text-slate-400 truncate">
-                            {user.email || (isAdmin ? 'updatetokendanswacam@gmail.com' : 'Petugas Lapangan')}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="shrink-0 flex items-center gap-2">
-                        {isAdmin ? (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-purple-50 text-purple-700 border border-purple-200">
-                            <Shield className="w-3 h-3" />
-                            <span>Admin</span>
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-600 border border-slate-200">
-                            <span>Petugas</span>
-                          </span>
-                        )}
-                        <ArrowRight className="w-4 h-4 text-slate-300 group-hover:text-blue-600 group-hover:translate-x-0.5 transition" />
-                      </div>
-                    </button>
-                  );
-                })
-              )}
-            </div>
-          </>
+          </div>
         )}
 
         {/* Security Notice */}
