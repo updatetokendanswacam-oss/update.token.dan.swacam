@@ -706,13 +706,18 @@ export default function App() {
     showToast('Seluruh data berhasil dikembalikan ke standar awal');
   };
 
-  // If user is not logged in, show verified Login Modal (Firebase Auth & Google Sign-In)
+  // If user is not logged in, show Login / User selector
   if (!currentUser) {
     return (
       <LoginModal
+        users={users}
         inviteCode={inviteCodeFromUrl}
-        onLoginSuccess={handleSelectUser}
-        onShowToast={showToast}
+        onLogin={handleSelectUser}
+        onGoogleSignIn={() => {
+          const firstAdmin = users.find((u) => u.role === 'admin') || users[0];
+          if (firstAdmin) handleSelectUser(firstAdmin);
+        }}
+        onRegisterFromInvite={handleRegisterFromInvite}
       />
     );
   }
