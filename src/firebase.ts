@@ -1,9 +1,23 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
-import firebaseConfig from '../firebase-applet-config.json';
+import bundledConfig from '../firebase-applet-config.json';
 
-// Initialize Firebase App
+// Resolves config consistently for AI Studio, GitHub clone, and Vercel production
+const firebaseConfig = {
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || bundledConfig.projectId || 'gen-lang-client-0520026727',
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || bundledConfig.appId,
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || bundledConfig.apiKey,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || bundledConfig.authDomain || 'gen-lang-client-0520026727.firebaseapp.com',
+  firestoreDatabaseId:
+    import.meta.env.VITE_FIREBASE_DATABASE_ID ||
+    bundledConfig.firestoreDatabaseId ||
+    'ai-studio-depotelupdatetok-a31e9064-79be-4d13-8e70-f4c66d735c45',
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || bundledConfig.storageBucket,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || bundledConfig.messagingSenderId,
+};
+
+// Initialize Firebase App instance
 export const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
 // Initialize Firebase Auth
@@ -13,7 +27,7 @@ googleProvider.setCustomParameters({
   prompt: 'select_account',
 });
 
-// Initialize Firestore with designated database ID
+// Initialize Firestore with the exact designated database ID
 export const db = firebaseConfig.firestoreDatabaseId
   ? getFirestore(app, firebaseConfig.firestoreDatabaseId)
   : getFirestore(app);
@@ -23,7 +37,7 @@ async function testConnection() {
   try {
     await getDocFromServer(doc(db, 'test', 'connection'));
   } catch (error) {
-    // Operating gracefully
+    // Graceful offline fallback
   }
 }
 testConnection();

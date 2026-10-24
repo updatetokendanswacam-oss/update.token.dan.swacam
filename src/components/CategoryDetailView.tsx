@@ -52,7 +52,6 @@ const SiteItemCard: React.FC<SiteItemCardProps> = React.memo(({
 
   const handleTokenSubmit = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (!isAdmin) return;
     const clean = tokenInputText.trim().replace(/^#\s*/, '');
     if (clean) {
       onAddToken(site.id, clean);
@@ -68,6 +67,7 @@ const SiteItemCard: React.FC<SiteItemCardProps> = React.memo(({
         {/* Left: Circle Check/Cross Icon */}
         <div className="flex items-start gap-3.5 min-w-0 flex-1">
           <button
+            type="button"
             onClick={() => onToggleCheck(site.id)}
             title={site.checked ? 'Klik untuk tandai Belum (✕)' : 'Klik untuk tandai Sudah (✓)'}
             className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center transition-transform active:scale-90 cursor-pointer shrink-0 ${
@@ -114,74 +114,71 @@ const SiteItemCard: React.FC<SiteItemCardProps> = React.memo(({
                         className="flex items-center justify-between text-xs sm:text-sm font-mono font-semibold text-emerald-700 bg-emerald-50/60 px-2.5 py-1 rounded-lg border border-emerald-100"
                       >
                         <span>{t.replace(/^#\s*/, '')}</span>
-                        {isAdmin && (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onRemoveToken(site.id, idx);
-                            }}
-                            title="Hapus nomor token ini (Admin)"
-                            className="p-1 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-100/70 transition cursor-pointer"
-                            aria-label="Hapus nomor token"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        )}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onRemoveToken(site.id, idx);
+                          }}
+                          title="Hapus nomor token ini"
+                          className="p-1 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-100/70 transition cursor-pointer"
+                          aria-label="Hapus nomor token"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
                       </div>
                     ))}
                   </div>
                 )}
 
-                {/* "Tambah catatan" button or input form (Admin only) */}
-                {isAdmin && (
-                  isInputOpen ? (
-                    <form
-                      onSubmit={handleTokenSubmit}
-                      className="flex items-center gap-2 mt-1.5"
-                    >
-                      <input
-                        type="text"
-                        autoFocus
-                        value={tokenInputText}
-                        onChange={(e) => setTokenInputText(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            e.preventDefault();
-                            handleTokenSubmit();
-                          }
-                        }}
-                        placeholder="Masukkan nomor token..."
-                        className="flex-1 px-3 py-1.5 rounded-lg border border-blue-500 text-xs sm:text-sm font-mono text-slate-800 focus:outline-none shadow-xs"
-                      />
-                      <button
-                        type="submit"
-                        title="Simpan nomor token"
-                        className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#1e2238] hover:bg-[#2b304f] text-white text-xs font-bold transition cursor-pointer"
-                      >
-                        <CornerDownLeft className="w-3.5 h-3.5" />
-                        <span>Return</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsInputOpen(false);
-                          setTokenInputText('');
-                        }}
-                        className="px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-medium cursor-pointer"
-                      >
-                        Batal
-                      </button>
-                    </form>
-                  ) : (
+                {/* "Tambah catatan" button or input form */}
+                {isInputOpen ? (
+                  <form
+                    onSubmit={handleTokenSubmit}
+                    className="flex items-center gap-2 mt-1.5"
+                  >
+                    <input
+                      type="text"
+                      autoFocus
+                      value={tokenInputText}
+                      onChange={(e) => setTokenInputText(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleTokenSubmit();
+                        }
+                      }}
+                      placeholder="Masukkan nomor token..."
+                      className="flex-1 px-3 py-1.5 rounded-lg border border-blue-500 text-xs sm:text-sm font-mono text-slate-800 focus:outline-none shadow-xs"
+                    />
                     <button
-                      onClick={() => setIsInputOpen(true)}
-                      className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-blue-600 transition font-medium cursor-pointer"
+                      type="submit"
+                      title="Simpan nomor token"
+                      className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#1e2238] hover:bg-[#2b304f] text-white text-xs font-bold transition cursor-pointer"
                     >
-                      <PlusSquare className="w-3.5 h-3.5" />
-                      <span>Tambah catatan</span>
+                      <CornerDownLeft className="w-3.5 h-3.5" />
+                      <span>Return</span>
                     </button>
-                  )
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsInputOpen(false);
+                        setTokenInputText('');
+                      }}
+                      className="px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-medium cursor-pointer"
+                    >
+                      Batal
+                    </button>
+                  </form>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setIsInputOpen(true)}
+                    className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-blue-600 transition font-medium cursor-pointer"
+                  >
+                    <PlusSquare className="w-3.5 h-3.5" />
+                    <span>Tambah catatan</span>
+                  </button>
                 )}
               </div>
             )}
@@ -193,15 +190,14 @@ const SiteItemCard: React.FC<SiteItemCardProps> = React.memo(({
                   <span className="text-[11px] font-semibold text-slate-400">
                     Dokumentasi KWh Meter ({site.photos?.length || 0} foto):
                   </span>
-                  {isAdmin && (
-                    <button
-                      onClick={() => onOpenCamera(site)}
-                      className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-semibold transition cursor-pointer"
-                    >
-                      <Camera className="w-3.5 h-3.5" />
-                      <span>Foto KWh</span>
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => onOpenCamera(site)}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-semibold transition cursor-pointer"
+                  >
+                    <Camera className="w-3.5 h-3.5" />
+                    <span>Foto KWh</span>
+                  </button>
                 </div>
 
                 {/* Thumbnails */}
@@ -231,35 +227,33 @@ const SiteItemCard: React.FC<SiteItemCardProps> = React.memo(({
           </div>
         </div>
 
-        {/* Right: Edit & Delete Icons (Admin Only) */}
-        {isAdmin && (
-          <div className="flex items-center gap-1 shrink-0">
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onEditSite(site);
-              }}
-              title="Edit data site"
-              className="p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition cursor-pointer"
-              aria-label="Edit site"
-            >
-              <Edit2 className="w-4 h-4" />
-            </button>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onDeleteSite(site.id);
-              }}
-              title={`Hapus site ${site.siteId || site.siteName}`}
-              className="p-2 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 active:scale-95 transition cursor-pointer"
-              aria-label="Hapus site"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
-          </div>
-        )}
+        {/* Right: Edit & Delete Icons */}
+        <div className="flex items-center gap-1 shrink-0">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onEditSite(site);
+            }}
+            title="Edit data site"
+            className="p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition cursor-pointer"
+            aria-label="Edit site"
+          >
+            <Edit2 className="w-4 h-4" />
+          </button>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDeleteSite(site.id);
+            }}
+            title={`Hapus site ${site.siteId || site.siteName}`}
+            className="p-2 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 active:scale-95 transition cursor-pointer"
+            aria-label="Hapus site"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        </div>
       </div>
     </div>
   );

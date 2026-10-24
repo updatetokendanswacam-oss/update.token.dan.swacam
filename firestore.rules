@@ -2,88 +2,38 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Test connection check
+    // Test connection health check
     match /test/connection {
       allow get: if true;
     }
 
-    // Global Safety Net: default-deny all undefined paths
-    match /{document=**} {
-      allow read, write: if false;
-    }
-
-    // Helper functions
-    function isSignedIn() {
-      return request.auth != null;
-    }
-
-    function isValidId(id) {
-      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
-    }
-
-    function isOwner(userId) {
-      return isSignedIn() && request.auth.uid == userId;
-    }
-
-    function isBootstrappedAdmin() {
-      return isSignedIn() && (
-        request.auth.token.email == 'updatetokendanswacam@gmail.com' ||
-        request.auth.token.email == 'admin@depotel.id'
-      );
-    }
-
-    function isAdmin() {
-      return isSignedIn() && (
-        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
-        isBootstrappedAdmin()
-      );
-    }
-
-    // User profiles collection
-    match /users/{userId} {
-      allow get: if isSignedIn() && (isOwner(userId) || isAdmin());
-      allow list: if isAdmin();
-      
-      // Prevent privilege escalation: Users cannot self-assign role = 'admin' unless verified bootstrapped admin
-      allow create: if isSignedIn() && isOwner(userId) && isValidId(userId)
-        && request.resource.data.id == userId
-        && (
-          (request.resource.data.role == 'user') ||
-          (request.resource.data.role == 'admin' && isBootstrappedAdmin())
-        );
-
-      allow update: if isSignedIn() && isValidId(userId) && (
-        (isOwner(userId) && request.resource.data.role == resource.data.role && request.resource.data.id == resource.data.id) ||
-        isAdmin()
-      );
-
-      allow delete: if isAdmin() && isValidId(userId);
-    }
-
-    // Admin authorization registry
-    match /admins/{userId} {
-      allow read: if true;
-      allow write: if isAdmin() && isValidId(userId);
-    }
-
-    // Categories and site monitoring lists (Shared database)
+    // Categories & site monitoring lists (Shared across Google AI Studio, Vercel, & GitHub)
     match /categories/{categoryId} {
-      allow get, list: if true;
-      allow create, delete: if isAdmin() && isValidId(categoryId);
-      allow update: if isSignedIn() && isValidId(categoryId);
+      allow read, write: if true;
     }
 
     // Invitation tokens
     match /invites/{inviteId} {
-      allow get, list: if true;
-      allow create, delete: if isAdmin() && isValidId(inviteId);
-      allow update: if isSignedIn() && isValidId(inviteId);
+      allow read, write: if true;
     }
 
     // App global configuration
     match /settings/{settingId} {
-      allow get: if true;
-      allow list, write: if isAdmin();
+      allow read, write: if true;
+    }
+
+    // Users and Admins collections
+    match /users/{userId} {
+      allow read, write: if true;
+    }
+
+    match /admins/{userId} {
+      allow read, write: if true;
+    }
+
+    // Fallback default deny
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }
