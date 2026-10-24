@@ -21,14 +21,19 @@ import {
   UserRole,
   InviteLink,
 } from './types';
-import { onAuthStateChanged, signOut } from 'firebase/auth';
-import { auth } from './firebase';
+import { onAuthStateChanged, signOut, signInWithPopup } from 'firebase/auth';
+import { auth, googleProvider } from './firebase';
 import {
   syncUserProfile,
   subscribeToCategories,
   saveCategoryToFirestore,
   deleteCategoryFromFirestore,
   saveInviteToFirestore,
+  subscribeToUsers,
+  saveUserToFirestore,
+  deleteUserFromFirestore,
+  isVerifiedAdmin,
+  BOOTSTRAPPED_ADMIN_EMAILS,
 } from './utils/firestoreService';
 import { INITIAL_CATEGORIES, INITIAL_USERS } from './utils/initialData';
 import { Header } from './components/Header';
@@ -107,15 +112,28 @@ export default function App() {
   // Real-time Service Worker update detection for smooth Vercel deployments
   const [hasUpdateAvailable, setHasUpdateAvailable] = useState(false);
   const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
+  const [loginErrorMessage, setLoginErrorMessage] = useState<string | null>(null);
+
+  const showToast = useCallback((message: string) => {
+    setToastMessage(message);
+    const t = setTimeout(() => {
+      setToastMessage(null);
+    }, 3000);
+    return () => clearTimeout(t);
+  }, []);
 
   // Real-time synchronization of authenticated Firebase user and verified role
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, async (fbUser) => {
       if (fbUser) {
         try {
-          const verifiedUser = await syncUserProfile(fbUser);
-          setCurrentUser(verifiedUser);
-          saveSession(verifiedUser);
+          const email = fbUser.email?.toLowerCase() || '';
+          const isAdmin = await isVerifiedAdmin(fbUser.uid, email);
+          if (isAdmin) {
+            const verifiedUser = await syncUserProfile(fbUser);
+            setCurrentUser(verifiedUser);
+            saveSession(verifiedUser);
+          }
         } catch (err) {
           console.error('Error synchronizing auth user profile:', err);
         }
@@ -126,6 +144,38 @@ export default function App() {
       unsubscribeAuth();
     };
   }, []);
+
+  // Real-time subscription to registered users in Firestore
+  useEffect(() => {
+    const unsubscribeUsers = subscribeToUsers((remoteUsers) => {
+      if (remoteUsers && remoteUsers.length > 0) {
+        setUsers(remoteUsers);
+        saveUsers(remoteUsers);
+
+        // Security Check: Validate active session against latest user database
+        const activeSession = loadSession();
+        if (activeSession) {
+          const found = remoteUsers.find(
+            (u) => u.id === activeSession.id || u.name.toLowerCase() === activeSession.name.toLowerCase()
+          );
+
+          if (!found || found.status === 'inactive') {
+            clearSession();
+            setCurrentUser(null);
+            showToast('Sesi berakhir: Akun Anda telah dinonaktifkan atau dihapus oleh Administrator.');
+          } else if (found.role !== activeSession.role) {
+            const updated = { ...activeSession, role: found.role };
+            setCurrentUser(updated);
+            saveSession(updated);
+          }
+        }
+      }
+    });
+
+    return () => {
+      unsubscribeUsers();
+    };
+  }, [showToast]);
 
   // Real-time subscription to persistent Firestore categories (Survives refresh & reconnects)
   useEffect(() => {
@@ -162,14 +212,6 @@ export default function App() {
     }, 250);
     return () => clearTimeout(t);
   }, [invites]);
-
-  const showToast = useCallback((message: string) => {
-    setToastMessage(message);
-    const t = setTimeout(() => {
-      setToastMessage(null);
-    }, 3000);
-    return () => clearTimeout(t);
-  }, []);
 
   const checkForAppUpdate = useCallback(async (manual = false) => {
     if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
@@ -262,56 +304,73 @@ export default function App() {
     [categories, selectedCategoryId]
   );
 
-  // User Authentication Handlers (Ketik nama & auto-save setelah 3x masuk)
-  const handleTypedLogin = (typedName: string) => {
-    const cleanName = typedName.trim();
-    if (!cleanName) return;
+  // Registered User Authentication (Hanya akun terdaftar & aktif yang diizinkan masuk)
+  const handleRegisteredUserLogin = (user: User) => {
+    setLoginErrorMessage(null);
 
-    let existingUser = users.find(
-      (u) => u.name.toLowerCase() === cleanName.toLowerCase()
-    );
-
-    const { count, isSaved, wasAlreadySaved } = recordNameLogin(cleanName);
-
-    let loggedInUser: User;
-    if (existingUser) {
-      loggedInUser = existingUser;
-    } else {
-      const isAdmin =
-        cleanName.toLowerCase().includes('admin') || cleanName.toLowerCase() === 'diki solihin';
-      loggedInUser = {
-        id: `usr-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-        name: cleanName,
-        role: isAdmin ? 'admin' : 'user',
-        avatar: '/logo.png',
-        status: 'active',
-        isOnline: true,
-        lastSeen: new Date().toISOString(),
-      };
-
-      if (isSaved) {
-        setUsers((prev) => {
-          const updated = [...prev, loggedInUser];
-          saveUsers(updated);
-          return updated;
-        });
-      }
+    const matched = users.find((u) => u.id === user.id && u.status === 'active');
+    if (!matched) {
+      const msg = 'Akun Anda belum terdaftar. Silakan hubungi Administrator untuk mendapatkan akses.';
+      setLoginErrorMessage(msg);
+      showToast(msg);
+      return;
     }
 
-    setCurrentUser(loggedInUser);
-    saveSession(loggedInUser);
+    if (matched.role === 'admin') {
+      const msg = 'Akses ditolak. Fitur ini hanya dapat digunakan oleh Administrator. Silakan masuk melalui tombol Masuk Cepat Administrator (Google).';
+      setLoginErrorMessage(msg);
+      showToast(msg);
+      return;
+    }
 
-    if (isSaved && !wasAlreadySaved) {
-      showToast(`🎉 Selamat! Nama "${cleanName}" telah masuk 3x dan resmi tersimpan permanen!`);
-    } else if (isSaved) {
-      showToast(`Masuk sebagai ${cleanName} (Nama Tersimpan)`);
-    } else {
-      showToast(`Masuk sebagai ${cleanName} (${count}/3x untuk simpan otomatis)`);
+    setCurrentUser(matched);
+    saveSession(matched);
+    showToast(`Selamat datang, ${matched.name}!`);
+  };
+
+  // Google Administrator Authentication (Khusus Administrator Terverifikasi)
+  const handleGoogleAdminSignIn = async () => {
+    setLoginErrorMessage(null);
+    try {
+      const result = await signInWithPopup(auth, googleProvider);
+      const fbUser = result.user;
+      const email = fbUser.email?.toLowerCase() || '';
+
+      // Verify that this Google account is officially authorized as Administrator
+      const isAdmin = await isVerifiedAdmin(fbUser.uid, email);
+
+      if (!isAdmin) {
+        await signOut(auth);
+        const msg = 'Akses ditolak. Fitur ini hanya dapat digunakan oleh Administrator.';
+        setLoginErrorMessage(msg);
+        showToast(msg);
+        throw new Error(msg);
+      }
+
+      const verifiedAdmin = await syncUserProfile(fbUser);
+      setCurrentUser(verifiedAdmin);
+      saveSession(verifiedAdmin);
+      showToast(`Selamat datang, Administrator ${verifiedAdmin.name}!`);
+    } catch (err: any) {
+      console.warn('Google Admin authentication notice:', err);
+      if (err?.code === 'auth/popup-closed-by-user') {
+        setLoginErrorMessage('Login Google dibatalkan.');
+      } else if (!err?.message?.includes('Akses ditolak')) {
+        setLoginErrorMessage('Gagal autentikasi Administrator. Pastikan menggunakan akun Google Administrator yang sah.');
+      }
+      throw err;
     }
   };
 
   const handleSelectUser = (user: User) => {
-    recordNameLogin(user.name);
+    if (user.status !== 'active') {
+      showToast('Akun Anda telah dinonaktifkan. Silakan hubungi Administrator untuk mendapatkan akses.');
+      return;
+    }
+    if (user.role === 'admin') {
+      showToast('Akses ditolak. Fitur ini hanya dapat digunakan oleh Administrator.');
+      return;
+    }
     setCurrentUser(user);
     saveSession(user);
     showToast(`Masuk sebagai ${user.name}`);
@@ -331,6 +390,7 @@ export default function App() {
     const updatedUsers = [...users, newUser];
     setUsers(updatedUsers);
     saveUsers(updatedUsers);
+    saveUserToFirestore(newUser).catch((err) => console.error('Error saving user to Firestore:', err));
 
     if (inviteCode) {
       const updatedInvites = invites.map((inv) => {
@@ -761,14 +821,25 @@ export default function App() {
     setDeleteModalState(null);
   }, [deleteModalState, selectedCategoryId, showToast]);
 
-  // User Management
-  const handleAddUser = (newUser: User) => {
+  // User Management with Firestore Persistence and Server-side authorization check
+  const handleAddUser = async (newUser: User) => {
+    if (currentUser?.role !== 'admin') {
+      showToast('Akses ditolak: Hanya Administrator yang berwenang menambah pengguna.');
+      return;
+    }
     setUsers((prev) => [...prev, newUser]);
-    showToast(`Pengguna ${newUser.name} berhasil ditambahkan`);
+    saveUsers([...users, newUser]);
+    await saveUserToFirestore(newUser);
+    showToast(`Pengguna ${newUser.name} berhasil ditambahkan dan diaktifkan`);
   };
 
-  const handleUpdateUser = (updated: User) => {
+  const handleUpdateUser = async (updated: User) => {
+    if (currentUser?.role !== 'admin') {
+      showToast('Akses ditolak: Hanya Administrator yang berwenang mengubah pengguna.');
+      return;
+    }
     setUsers((prev) => prev.map((u) => (u.id === updated.id ? updated : u)));
+    await saveUserToFirestore(updated);
     if (currentUser?.id === updated.id) {
       setCurrentUser(updated);
       saveSession(updated);
@@ -776,13 +847,27 @@ export default function App() {
     showToast(`Data ${updated.name} diperbarui`);
   };
 
-  const handleDeleteUser = (userId: string) => {
+  const handleDeleteUser = async (userId: string, permanent: boolean = true) => {
+    if (currentUser?.role !== 'admin') {
+      showToast('Akses ditolak: Hanya Administrator yang berwenang mengelola pengguna.');
+      return;
+    }
     if (userId === currentUser?.id) {
       showToast('Tidak dapat menghapus akun Anda sendiri');
       return;
     }
-    setUsers((prev) => prev.filter((u) => u.id !== userId));
-    showToast('Pengguna telah dihapus');
+
+    if (permanent) {
+      setUsers((prev) => prev.filter((u) => u.id !== userId));
+      await deleteUserFromFirestore(userId);
+      showToast('Pengguna telah dihapus permanen');
+    } else {
+      const updated = users.map((u) => (u.id === userId ? { ...u, status: 'inactive' as const } : u));
+      setUsers(updated);
+      const target = updated.find((u) => u.id === userId);
+      if (target) await saveUserToFirestore(target);
+      showToast('Pengguna dinonaktifkan');
+    }
   };
 
   const handleCreateInvite = (role: UserRole): InviteLink => {
@@ -857,11 +942,9 @@ export default function App() {
       <LoginModal
         users={users}
         inviteCode={inviteCodeFromUrl}
-        onLogin={handleTypedLogin}
-        onGoogleSignIn={() => {
-          const firstAdmin = users.find((u) => u.role === 'admin') || users[0];
-          if (firstAdmin) handleTypedLogin(firstAdmin.name);
-        }}
+        serverErrorMessage={loginErrorMessage}
+        onLogin={handleRegisteredUserLogin}
+        onGoogleSignIn={handleGoogleAdminSignIn}
         onRegisterFromInvite={handleRegisterFromInvite}
       />
     );
@@ -1192,8 +1275,8 @@ export default function App() {
                 handleAddUser(newUser);
               }}
               onUpdateUser={handleUpdateUser}
-              onDeleteUser={(userId) => {
-                handleDeleteUser(userId);
+              onDeleteUser={(userId, permanent) => {
+                handleDeleteUser(userId, permanent);
               }}
               onCreateInvite={handleCreateInvite}
             />

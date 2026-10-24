@@ -2,36 +2,60 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Test connection health check
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        request.auth.token.email.lower() in ['updatetokendanswacam@gmail.com', 'admin@depotel.id']
+      );
+    }
+
+    // Health check endpoint
     match /test/connection {
       allow get: if true;
     }
 
-    // Categories & site monitoring lists (Shared across Google AI Studio, Vercel, & GitHub)
-    match /categories/{categoryId} {
-      allow read, write: if true;
+    // Administrators registry (Only authenticated admins can write)
+    match /admins/{adminId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
     }
 
-    // Invitation tokens
-    match /invites/{inviteId} {
-      allow read, write: if true;
-    }
-
-    // App global configuration
-    match /settings/{settingId} {
-      allow read, write: if true;
-    }
-
-    // Users and Admins collections
+    // Registered Users list
+    // Read: allowed so the application can verify registered users and load roster
+    // Write: only verified Administrator can add, update, activate/deactivate, or delete users
     match /users/{userId} {
-      allow read, write: if true;
+      allow read: if true;
+      allow write: if isAdmin();
     }
 
-    match /admins/{userId} {
-      allow read, write: if true;
+    // Monitoring categories and site checklists
+    // Read: allowed for operational checklist monitoring
+    // Create/Delete: ONLY verified Administrator can create new categories or delete categories
+    // Update: Allowed for checklist progress (marking sites, entering tokens, uploading photos)
+    match /categories/{categoryId} {
+      allow read: if true;
+      allow create, delete: if isAdmin();
+      allow update: if true;
     }
 
-    // Fallback default deny
+    // Team invitation links
+    match /invites/{inviteId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Global settings
+    match /settings/{settingId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Default deny all other paths
     match /{document=**} {
       allow read, write: if false;
     }

@@ -13,12 +13,34 @@ import {
 import { User as FirebaseUser } from 'firebase/auth';
 import { db } from '../firebase';
 import { UpdateCategory, User, InviteLink } from '../types';
-import { INITIAL_CATEGORIES } from './initialData';
+import { INITIAL_CATEGORIES, INITIAL_USERS } from './initialData';
 
-const BOOTSTRAPPED_ADMIN_EMAILS = [
+export const BOOTSTRAPPED_ADMIN_EMAILS: string[] = [
   'updatetokendanswacam@gmail.com',
   'admin@depotel.id'
 ];
+
+/**
+ * Checks if a user is a verified Administrator based on server-side Firestore records
+ * or official bootstrapped admin emails.
+ */
+export async function isVerifiedAdmin(uid: string, email?: string | null): Promise<boolean> {
+  const cleanEmail = email?.trim().toLowerCase() || '';
+  if (cleanEmail && BOOTSTRAPPED_ADMIN_EMAILS.includes(cleanEmail)) {
+    return true;
+  }
+
+  try {
+    const adminSnap = await getDoc(doc(db, 'admins', uid));
+    if (adminSnap.exists()) {
+      return true;
+    }
+  } catch (err) {
+    console.warn('Error verifying admin document:', err);
+  }
+
+  return false;
+}
 
 /**
  * Sync or register an authenticated Firebase user in Firestore with verified role.
@@ -30,25 +52,16 @@ export async function syncUserProfile(fbUser: FirebaseUser): Promise<User> {
   const userDocRef = doc(db, 'users', uid);
   const adminDocRef = doc(db, 'admins', uid);
 
-  // Check if admin doc exists or matches authorized admin email
-  let isAdmin = false;
-  try {
-    const adminSnap = await getDoc(adminDocRef);
-    if (adminSnap.exists()) {
-      isAdmin = true;
-    } else if (BOOTSTRAPPED_ADMIN_EMAILS.includes(email)) {
-      isAdmin = true;
-      // Record in admins collection
+  const isAdmin = await isVerifiedAdmin(uid, email);
+  if (isAdmin) {
+    try {
       await setDoc(adminDocRef, {
         userId: uid,
         email,
         addedAt: new Date().toISOString()
       }, { merge: true });
-    }
-  } catch (err) {
-    console.warn('Error checking admin doc:', err);
-    if (BOOTSTRAPPED_ADMIN_EMAILS.includes(email)) {
-      isAdmin = true;
+    } catch (e) {
+      console.warn('Failed recording admin doc:', e);
     }
   }
 
@@ -89,70 +102,105 @@ export async function syncUserProfile(fbUser: FirebaseUser): Promise<User> {
 }
 
 /**
- * Verifies or creates an authenticated user record when Firebase Auth provider
- * encounters domain/provider limitations in preview environments.
- * Strictly enforces that 'admin' role can ONLY be acquired with the correct admin credentials
- * matching authorized admin emails (BOOTSTRAPPED_ADMIN_EMAILS).
+ * Real-time subscription to registered users in Firestore.
+ * Automatically seeds INITIAL_USERS if the users collection in Firestore is empty.
  */
-export async function createOrVerifyDirectUser(
-  email: string,
-  passwordOrPin: string,
-  displayName?: string,
-  isRegister = false
-): Promise<User> {
-  const cleanEmail = email.trim().toLowerCase();
-  const isAdminEmail = BOOTSTRAPPED_ADMIN_EMAILS.includes(cleanEmail);
+export function subscribeToUsers(
+  onUpdate: (users: User[]) => void,
+  onError?: (err: Error) => void
+): Unsubscribe {
+  const usersCol = collection(db, 'users');
 
-  // If claiming an Admin email, strictly enforce the master Admin Security Key
-  if (isAdminEmail) {
-    const validAdminKeys = ['depotel2026', 'admin123', 'DEPOTEL2026', 'depotelgroup', 'admin2026'];
-    const isValidKey = validAdminKeys.includes(passwordOrPin) || passwordOrPin.length >= 6;
-    if (!isValidKey) {
-      throw new Error('Kata sandi / PIN Keamanan Administrator salah. Akses ditolak.');
+  return onSnapshot(
+    usersCol,
+    async (snapshot) => {
+      if (snapshot.empty) {
+        try {
+          await seedInitialUsers();
+        } catch (e) {
+          console.error('Error seeding initial users:', e);
+        }
+        return;
+      }
+
+      const usersList: User[] = [];
+      snapshot.forEach((d) => {
+        usersList.push(d.data() as User);
+      });
+
+      // Keep deterministic order: admin first, then by name
+      usersList.sort((a, b) => {
+        if (a.role === 'admin' && b.role !== 'admin') return -1;
+        if (a.role !== 'admin' && b.role === 'admin') return 1;
+        return a.name.localeCompare(b.name);
+      });
+
+      onUpdate(usersList);
+    },
+    (err) => {
+      console.error('Firestore users snapshot listener error:', err);
+      if (onError) onError(err);
     }
-  }
+  );
+}
 
-  // Derive stable deterministic UID from email
-  let hash = 0;
-  for (let i = 0; i < cleanEmail.length; i++) {
-    hash = (hash << 5) - hash + cleanEmail.charCodeAt(i);
-    hash |= 0;
-  }
-  const uid = `usr-${Math.abs(hash)}`;
-  const role: 'admin' | 'user' = isAdminEmail ? 'admin' : 'user';
+/**
+ * Seed Firestore with INITIAL_USERS
+ */
+export async function seedInitialUsers(): Promise<void> {
+  for (const user of INITIAL_USERS) {
+    const userRef = doc(db, 'users', user.id);
+    await setDoc(userRef, user, { merge: true });
 
-  const userProfile: User = {
-    id: uid,
-    name: displayName?.trim() || (isAdminEmail ? 'DEPOTEL Administrator' : cleanEmail.split('@')[0]),
-    email: cleanEmail,
-    role,
-    avatar: '/logo.png',
-    status: 'active',
-    isOnline: true,
-    lastSeen: 'Sekarang',
-  };
-
-  // Attempt persisting to Firestore if online
-  try {
-    const userDocRef = doc(db, 'users', uid);
-    await setDoc(userDocRef, {
-      ...userProfile,
-      lastLoginAt: new Date().toISOString()
-    }, { merge: true });
-
-    if (isAdminEmail) {
-      const adminDocRef = doc(db, 'admins', uid);
-      await setDoc(adminDocRef, {
-        userId: uid,
-        email: cleanEmail,
-        addedAt: new Date().toISOString()
+    if (user.role === 'admin') {
+      const adminRef = doc(db, 'admins', user.id);
+      await setDoc(adminRef, {
+        userId: user.id,
+        name: user.name,
+        email: user.email || 'updatetokendanswacam@gmail.com',
+        addedAt: new Date().toISOString(),
       }, { merge: true });
     }
-  } catch (e) {
-    console.warn('Firestore user doc sync notice:', e);
   }
+}
 
-  return userProfile;
+/**
+ * Save or update a user document in Firestore
+ */
+export async function saveUserToFirestore(user: User): Promise<void> {
+  const userRef = doc(db, 'users', user.id);
+  await setDoc(userRef, user, { merge: true });
+
+  const adminRef = doc(db, 'admins', user.id);
+  if (user.role === 'admin') {
+    await setDoc(adminRef, {
+      userId: user.id,
+      name: user.name,
+      email: user.email || '',
+      addedAt: new Date().toISOString(),
+    }, { merge: true });
+  } else {
+    try {
+      await deleteDoc(adminRef);
+    } catch {
+      // Ignored if wasn't admin
+    }
+  }
+}
+
+/**
+ * Delete a user from Firestore
+ */
+export async function deleteUserFromFirestore(userId: string): Promise<void> {
+  const userRef = doc(db, 'users', userId);
+  await deleteDoc(userRef);
+
+  const adminRef = doc(db, 'admins', userId);
+  try {
+    await deleteDoc(adminRef);
+  } catch {
+    // Ignored
+  }
 }
 
 /**
@@ -168,7 +216,6 @@ export function subscribeToCategories(
     categoriesCol,
     async (snapshot) => {
       if (snapshot.empty) {
-        // If Firestore categories collection is empty, seed it with INITIAL_CATEGORIES
         try {
           await seedInitialCategories();
         } catch (e) {
@@ -182,11 +229,10 @@ export function subscribeToCategories(
         cats.push(d.data() as UpdateCategory);
       });
 
-      // Maintain order or default sorting
       onUpdate(cats);
     },
     (err) => {
-      console.error('Firestore snapshot listener error:', err);
+      console.error('Firestore categories snapshot listener error:', err);
       if (onError) onError(err);
     }
   );
