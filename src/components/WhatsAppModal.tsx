@@ -22,7 +22,7 @@ export const WhatsAppModal: React.FC<WhatsAppModalProps> = ({
       : '0,00';
 
   const buildWhatsAppText = () => {
-    let header = `${category.title} ${category.period}\nJumlah Tiket Site : ${totalSites} Site\n✅ Sudah Tercentang : ${checkedSites} Site\n❌ Belum Tercentang : ${uncheckedSites} Site\n📊 Submitted : ${percentage}%\n\n`;
+    const header = `${category.title} ${category.period}\nJumlah Tiket Site : ${totalSites} Site\n✅ Sudah Tercentang : ${checkedSites} Site\n❌ Belum Tercentang : ${uncheckedSites} Site\n📊 Submitted : ${percentage}%\n=================================\n`;
 
     const listLines = category.sites.map((site) => {
       const icon = site.checked ? '✅' : '❌';
