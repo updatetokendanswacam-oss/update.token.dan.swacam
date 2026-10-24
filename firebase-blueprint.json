@@ -1,0 +1,79 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Authenticated user profile in DEPOTEL monitoring system",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Firebase Auth UID" },
+        "name": { "type": "string", "description": "Display name of the user" },
+        "email": { "type": "string", "description": "Email address" },
+        "role": { "type": "string", "enum": ["admin", "user"], "description": "Role permission level" },
+        "avatar": { "type": "string", "description": "Avatar URL" },
+        "status": { "type": "string", "enum": ["active", "inactive"], "description": "Account status" },
+        "createdAt": { "type": "string", "description": "Creation timestamp" },
+        "lastLoginAt": { "type": "string", "description": "Last login timestamp" }
+      },
+      "required": ["id", "name", "role", "email"]
+    },
+    "Admin": {
+      "title": "Admin",
+      "description": "Verified administrator role document",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Firebase Auth UID" },
+        "email": { "type": "string", "description": "Admin email address" },
+        "addedAt": { "type": "string", "description": "Timestamp when admin role was granted" }
+      },
+      "required": ["userId", "email"]
+    },
+    "Category": {
+      "title": "Category",
+      "description": "Token and SWACAM monitoring category period with site list",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique category identifier" },
+        "title": { "type": "string", "description": "Category title" },
+        "period": { "type": "string", "description": "Monitoring period label" },
+        "type": { "type": "string", "enum": ["token_manual", "swacam", "token", "other"], "description": "Category type" },
+        "allowCamera": { "type": "boolean", "description": "Whether camera is enabled" },
+        "allowTokenInput": { "type": "boolean", "description": "Whether token input is enabled" },
+        "sites": { "type": "array", "description": "List of monitoring site items" },
+        "updatedAt": { "type": "string", "description": "Last update timestamp" },
+        "updatedBy": { "type": "string", "description": "Name of last updater" }
+      },
+      "required": ["id", "title", "period", "type", "sites"]
+    },
+    "Invite": {
+      "title": "Invite",
+      "description": "Invitation link for field officers",
+      "type": "object",
+      "properties": {
+        "code": { "type": "string", "description": "Unique invite code" },
+        "role": { "type": "string", "enum": ["admin", "user"], "description": "Target role" },
+        "createdAt": { "type": "string", "description": "Creation timestamp" },
+        "createdBy": { "type": "string", "description": "Creator user ID" },
+        "usedBy": { "type": "array", "description": "Names of users who redeemed this code" }
+      },
+      "required": ["code", "role", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Authenticated user profiles"
+    },
+    "/admins/{userId}": {
+      "schema": "Admin",
+      "description": "Verified admin permissions registry"
+    },
+    "/categories/{categoryId}": {
+      "schema": "Category",
+      "description": "Shared Token and SWACAM monitoring list records"
+    },
+    "/invites/{inviteId}": {
+      "schema": "Invite",
+      "description": "Authorized invitation records created by administrators"
+    }
+  }
+}

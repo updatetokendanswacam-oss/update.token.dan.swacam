@@ -38,6 +38,28 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
   const [copiedLink, setCopiedLink] = useState<string | null>(null);
   const [inviteFeedback, setInviteFeedback] = useState<string | null>(null);
 
+  if (currentUser?.role !== 'admin') {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in">
+        <div className="w-full max-w-sm rounded-3xl bg-white border border-red-200 shadow-2xl p-6 text-center text-slate-800">
+          <div className="w-12 h-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center mx-auto mb-3">
+            <Shield className="w-6 h-6" />
+          </div>
+          <h3 className="text-base font-bold text-slate-900">Akses Ditolak</h3>
+          <p className="text-xs text-slate-500 mt-2">
+            Hanya Administrator yang memiliki izin untuk mengelola anggota tim dan hak akses.
+          </p>
+          <button
+            onClick={onClose}
+            className="mt-5 px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold cursor-pointer"
+          >
+            Tutup
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   const filteredUsers = users.filter((u) =>
     u.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     (u.email && u.email.toLowerCase().includes(searchTerm.toLowerCase()))

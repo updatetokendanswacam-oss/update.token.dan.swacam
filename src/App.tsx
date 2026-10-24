@@ -20,6 +20,15 @@ import {
   UserRole,
   InviteLink,
 } from './types';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { auth } from './firebase';
+import {
+  syncUserProfile,
+  subscribeToCategories,
+  saveCategoryToFirestore,
+  deleteCategoryFromFirestore,
+  saveInviteToFirestore,
+} from './utils/firestoreService';
 import { INITIAL_CATEGORIES, INITIAL_USERS } from './utils/initialData';
 import { Header } from './components/Header';
 import { Sidebar } from './components/Sidebar';
@@ -101,6 +110,39 @@ export default function App() {
         setInviteCodeFromUrl(invite);
       }
     }
+  }, []);
+
+  // Real-time synchronization of authenticated Firebase user and verified role
+  useEffect(() => {
+    const unsubscribeAuth = onAuthStateChanged(auth, async (fbUser) => {
+      if (fbUser) {
+        try {
+          const verifiedUser = await syncUserProfile(fbUser);
+          setCurrentUser(verifiedUser);
+          saveSession(verifiedUser);
+        } catch (err) {
+          console.error('Error synchronizing auth user profile:', err);
+        }
+      }
+    });
+
+    return () => {
+      unsubscribeAuth();
+    };
+  }, []);
+
+  // Real-time subscription to persistent Firestore categories (Survives refresh & reconnects)
+  useEffect(() => {
+    const unsubscribeCats = subscribeToCategories((remoteCats) => {
+      if (remoteCats && remoteCats.length > 0) {
+        setCategories(remoteCats);
+        saveCategories(remoteCats);
+      }
+    });
+
+    return () => {
+      unsubscribeCats();
+    };
   }, []);
 
   // Debounced persistence to eliminate UI blocking on frequent updates
@@ -195,7 +237,12 @@ export default function App() {
     showToast(`Selamat datang, ${newUser.name}!`);
   };
 
-  const handleLogout = (forgetDevice = false) => {
+  const handleLogout = async (forgetDevice = false) => {
+    try {
+      await signOut(auth);
+    } catch (e) {
+      console.warn('SignOut error:', e);
+    }
     clearSession();
     setCurrentUser(null);
     setShowAccountSettings(false);
@@ -252,24 +299,38 @@ export default function App() {
     }));
   };
 
-  // Site Check/Uncheck action (Hanya mengubah status site yang diklik oleh pengguna)
+  // Site Check/Uncheck action (Hanya mengubah status site yang diklik langsung oleh pengguna, disimpan permanen)
   const handleToggleCheck = useCallback((targetSiteId: string) => {
     setCategories((prevCategories) => {
-      const updated = prevCategories.map((cat) => ({
-        ...cat,
-        sites: cat.sites.map((site) => {
-          if (site.id === targetSiteId) {
-            return {
-              ...site,
-              checked: !site.checked,
-              updatedAt: new Date().toISOString(),
-              updatedBy: currentUser?.name || 'Petugas',
-            };
-          }
-          return site;
-        }),
-      }));
+      let targetCat: UpdateCategory | undefined;
+      const updated = prevCategories.map((cat) => {
+        const containsSite = cat.sites.some((s) => s.id === targetSiteId);
+        if (!containsSite) return cat;
+
+        const updatedCat = {
+          ...cat,
+          sites: cat.sites.map((site) => {
+            if (site.id === targetSiteId) {
+              return {
+                ...site,
+                checked: !site.checked,
+                updatedAt: new Date().toISOString(),
+                updatedBy: currentUser?.name || 'Petugas',
+              };
+            }
+            return site;
+          }),
+        };
+        targetCat = updatedCat;
+        return updatedCat;
+      });
+
       saveCategories(updated);
+      if (targetCat) {
+        saveCategoryToFirestore(targetCat).catch((err) =>
+          console.error('Failed to sync checklist toggle to Firestore:', err)
+        );
+      }
       return updated;
     });
   }, [currentUser?.name]);
@@ -287,6 +348,11 @@ export default function App() {
         };
       });
       saveCategories(updated);
+      updated.forEach((c) => {
+        if (c.sites.some((s) => s.id === siteId)) {
+          saveCategoryToFirestore(c).catch((e) => console.error(e));
+        }
+      });
       return updated;
     });
     showToast(`Token listrik berhasil ditambahkan`);
@@ -304,6 +370,11 @@ export default function App() {
         };
       });
       saveCategories(updated);
+      updated.forEach((c) => {
+        if (c.sites.some((s) => s.id === siteId)) {
+          saveCategoryToFirestore(c).catch((e) => console.error(e));
+        }
+      });
       return updated;
     });
   }, [currentUser?.name]);
@@ -324,6 +395,11 @@ export default function App() {
           };
         });
         saveCategories(updated);
+        updated.forEach((c) => {
+          if (c.sites.some((s) => s.id === siteId)) {
+            saveCategoryToFirestore(c).catch((e) => console.error(e));
+          }
+        });
         return updated;
       });
 
@@ -351,6 +427,7 @@ export default function App() {
           }),
         }));
         saveCategories(updated);
+        updated.forEach((c) => saveCategoryToFirestore(c).catch((e) => console.error(e)));
         return updated;
       });
 
@@ -378,6 +455,11 @@ export default function App() {
         updatedBy: currentUser?.name || 'Petugas',
       }));
       saveCategories(updated);
+      updated.forEach((c) => {
+        if (c.sites.some((s) => s.id === updatedSite.id)) {
+          saveCategoryToFirestore(c).catch((e) => console.error(e));
+        }
+      });
       return updated;
     });
     setEditingSite(null);
@@ -397,15 +479,21 @@ export default function App() {
       updatedBy: currentUser?.name || 'Petugas',
     };
 
-    setCategories((prev) =>
-      prev.map((cat) => {
+    setCategories((prev) => {
+      const updated = prev.map((cat) => {
         if (cat.id !== selectedCategoryId) return cat;
         return {
           ...cat,
           sites: [...cat.sites, newSite],
         };
-      })
-    );
+      });
+      saveCategories(updated);
+      const targetCat = updated.find((c) => c.id === selectedCategoryId);
+      if (targetCat) {
+        saveCategoryToFirestore(targetCat).catch((err) => console.error(err));
+      }
+      return updated;
+    });
 
     setShowAddSiteModal(false);
     showToast(`Site ${newSite.siteId} berhasil ditambahkan ke daftar`);
@@ -422,12 +510,20 @@ export default function App() {
   }, [categories, selectedCategoryId]);
 
   const handleEditCategory = useCallback((cat: UpdateCategory) => {
+    if (currentUser?.role !== 'admin') {
+      showToast('Akses ditolak: Hanya Administrator yang berwenang mengubah kategori.');
+      return;
+    }
     setEditingCategory(cat);
-  }, []);
+  }, [currentUser?.role, showToast]);
 
   const handleUpdateSiteCount = useCallback((categoryId: string, newTotal: number) => {
-    setCategories((prev) =>
-      prev.map((cat) => {
+    if (currentUser?.role !== 'admin') {
+      showToast('Akses ditolak: Hanya Administrator yang berwenang mengubah jumlah site.');
+      return;
+    }
+    setCategories((prev) => {
+      const updated = prev.map((cat) => {
         if (cat.id !== categoryId) return cat;
         const currentCount = cat.sites.length;
         if (newTotal === currentCount) return cat;
@@ -458,34 +554,50 @@ export default function App() {
             sites: [...cat.sites, ...additionalSites],
           };
         }
-      })
-    );
+      });
+      saveCategories(updated);
+      const targetCat = updated.find((c) => c.id === categoryId);
+      if (targetCat) {
+        saveCategoryToFirestore(targetCat).catch((e) => console.error(e));
+      }
+      return updated;
+    });
     showToast(`Total site berhasil disesuaikan menjadi ${newTotal}`);
-  }, [showToast]);
+  }, [currentUser?.role, showToast]);
 
   const handleDeleteCategory = useCallback((categoryId: string) => {
+    if (currentUser?.role !== 'admin') {
+      showToast('Akses ditolak: Hanya Administrator yang berwenang menghapus kategori.');
+      return;
+    }
     const catToDelete = categories.find((c) => c.id === categoryId);
     if (!catToDelete) return;
     setDeleteModalState({
       type: 'category',
       category: catToDelete,
     });
-  }, [categories]);
+  }, [categories, currentUser?.role, showToast]);
 
   const handleConfirmDelete = useCallback(() => {
     if (!deleteModalState) return;
 
     if (deleteModalState.type === 'site' && deleteModalState.site) {
       const siteId = deleteModalState.site.id;
-      setCategories((prev) =>
-        prev.map((cat) => {
+      setCategories((prev) => {
+        const updated = prev.map((cat) => {
           if (cat.id !== selectedCategoryId) return cat;
           return {
             ...cat,
             sites: cat.sites.filter((s) => s.id !== siteId),
           };
-        })
-      );
+        });
+        saveCategories(updated);
+        const targetCat = updated.find((c) => c.id === selectedCategoryId);
+        if (targetCat) {
+          saveCategoryToFirestore(targetCat).catch((err) => console.error(err));
+        }
+        return updated;
+      });
       showToast(`Site ${deleteModalState.site.siteId} dihapus`);
     } else if (deleteModalState.type === 'category' && deleteModalState.category) {
       const catId = deleteModalState.category.id;
@@ -494,6 +606,8 @@ export default function App() {
         if (selectedCategoryId === catId && remaining.length > 0) {
           setSelectedCategoryId(remaining[0].id);
         }
+        saveCategories(remaining);
+        deleteCategoryFromFirestore(catId).catch((err) => console.error(err));
         return remaining;
       });
       showToast(`Kategori "${deleteModalState.category.title}" dihapus`);
@@ -537,7 +651,12 @@ export default function App() {
       usedBy: [],
       active: true,
     };
-    setInvites((prev) => [newInvite, ...prev]);
+    setInvites((prev) => {
+      const updated = [newInvite, ...prev];
+      saveInvites(updated);
+      saveInviteToFirestore(newInvite).catch((e) => console.error(e));
+      return updated;
+    });
     showToast(`Tautan undangan kode ${newInvite.code} berhasil dibuat`);
     return newInvite;
   };
@@ -587,17 +706,13 @@ export default function App() {
     showToast('Seluruh data berhasil dikembalikan ke standar awal');
   };
 
-  // If user is not logged in, show Login / User selector
+  // If user is not logged in, show verified Login Modal (Firebase Auth & Google Sign-In)
   if (!currentUser) {
     return (
       <LoginModal
-        users={users}
         inviteCode={inviteCodeFromUrl}
-        onLogin={handleSelectUser}
-        onGoogleSignIn={() => {
-          const firstAdmin = users.find((u) => u.role === 'admin') || users[0];
-          if (firstAdmin) handleSelectUser(firstAdmin);
-        }}
+        onLoginSuccess={handleSelectUser}
+        onShowToast={showToast}
       />
     );
   }
@@ -631,11 +746,23 @@ export default function App() {
 
         {/* Right Content Area with responsive offset for Sidebar */}
         <div className="flex-1 flex flex-col min-w-0 lg:pl-64 xl:pl-72">
-          {/* Top Header (Dashboard & Pengaturan removed from top center per instructions) */}
+          {/* Top Header */}
           <Header
             currentUser={currentUser}
-            onOpenUserManagement={() => setShowUserManagement(true)}
-            onOpenInviteModal={() => setShowInviteModal(true)}
+            onOpenUserManagement={() => {
+              if (currentUser?.role !== 'admin') {
+                showToast('Akses ditolak: Hanya Administrator yang berwenang mengelola pengguna.');
+                return;
+              }
+              setShowUserManagement(true);
+            }}
+            onOpenInviteModal={() => {
+              if (currentUser?.role !== 'admin') {
+                showToast('Akses ditolak: Hanya Administrator yang berwenang membuat tautan undangan.');
+                return;
+              }
+              setShowInviteModal(true);
+            }}
             onOpenLogoutModal={() => setShowAccountSettings(true)}
             onToggleMobileSidebar={() => setIsOpenMobileSidebar(true)}
             onRefresh={handleRefresh}
@@ -658,8 +785,20 @@ export default function App() {
                   categories={categories}
                   currentUser={currentUser}
                   onOpenCategory={handleOpenCategory}
-                  onOpenInviteModal={() => setShowInviteModal(true)}
-                  onOpenAddCategoryModal={() => setShowAddCategoryModal(true)}
+                  onOpenInviteModal={() => {
+                    if (currentUser?.role !== 'admin') {
+                      showToast('Akses ditolak: Hanya Administrator yang berwenang membuat tautan undangan.');
+                      return;
+                    }
+                    setShowInviteModal(true);
+                  }}
+                  onOpenAddCategoryModal={() => {
+                    if (currentUser?.role !== 'admin') {
+                      showToast('Akses ditolak: Hanya Administrator yang berwenang menambah periode baru.');
+                      return;
+                    }
+                    setShowAddCategoryModal(true);
+                  }}
                   onEditCategory={handleEditCategory}
                   onDeleteCategory={handleDeleteCategory}
                   onUpdateSiteCount={handleUpdateSiteCount}
@@ -693,10 +832,28 @@ export default function App() {
                   saveSession(u);
                   setUsers((prev) => prev.map((x) => (x.id === u.id ? u : x)));
                 }}
-                onOpenUserManagement={() => setShowUserManagement(true)}
-                onOpenInviteModal={() => setShowInviteModal(true)}
+                onOpenUserManagement={() => {
+                  if (currentUser?.role !== 'admin') {
+                    showToast('Akses ditolak: Hanya Administrator yang berwenang mengelola pengguna.');
+                    return;
+                  }
+                  setShowUserManagement(true);
+                }}
+                onOpenInviteModal={() => {
+                  if (currentUser?.role !== 'admin') {
+                    showToast('Akses ditolak: Hanya Administrator yang berwenang membuat tautan undangan.');
+                    return;
+                  }
+                  setShowInviteModal(true);
+                }}
                 onOpenExportModal={() => setShowExportModal(true)}
-                onOpenAddCategoryModal={() => setShowAddCategoryModal(true)}
+                onOpenAddCategoryModal={() => {
+                  if (currentUser?.role !== 'admin') {
+                    showToast('Akses ditolak: Hanya Administrator yang berwenang menambah periode baru.');
+                    return;
+                  }
+                  setShowAddCategoryModal(true);
+                }}
                 onOpenGoogleDrive={() => setShowGoogleDriveModal(true)}
                 onLogout={handleLogout}
                 onResetData={handleResetData}
@@ -797,7 +954,12 @@ export default function App() {
             <AddCategoryModal
               onClose={() => setShowAddCategoryModal(false)}
               onAddCategory={(cat) => {
-                setCategories((prev) => [...prev, cat]);
+                setCategories((prev) => {
+                  const updated = [...prev, cat];
+                  saveCategories(updated);
+                  saveCategoryToFirestore(cat).catch((err) => console.error(err));
+                  return updated;
+                });
                 setShowAddCategoryModal(false);
                 showToast(`Kategori "${cat.title}" berhasil dibuat`);
               }}

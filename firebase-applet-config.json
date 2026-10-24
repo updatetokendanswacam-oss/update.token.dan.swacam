@@ -3,6 +3,7 @@
   "appId": "1:963338767699:web:352f96339712479ab6e5a6",
   "apiKey": "AIzaSyAMHrxAi-l5SGDWPT-dine-oTgZvhBjlRM",
   "authDomain": "gen-lang-client-0520026727.firebaseapp.com",
+  "firestoreDatabaseId": "ai-studio-depotelupdatetok-a31e9064-79be-4d13-8e70-f4c66d735c45",
   "storageBucket": "gen-lang-client-0520026727.firebasestorage.app",
   "messagingSenderId": "963338767699",
   "measurementId": "",
