@@ -40,6 +40,7 @@ import {
   loadAllPhotosFromFirestore,
 } from './utils/firestoreService';
 import { INITIAL_CATEGORIES, INITIAL_USERS } from './utils/initialData';
+import { savePhotoToPhoneGallery } from './utils/galleryService';
 import { Header } from './components/Header';
 import { Sidebar } from './components/Sidebar';
 import { OfflineBanner } from './components/OfflineBanner';
@@ -673,7 +674,27 @@ export default function App() {
 
     setCameraSite(null);
     setCameraCategory(null);
-    showToast(`Foto (${photo.brandTitle || 'DEPOTEL'}) berhasil tersimpan`);
+
+    // 2. Automatically save copy to device Phone Gallery / Media Album
+    let gallerySaved = false;
+    if (photo.dataUrl) {
+      try {
+        const result = await savePhotoToPhoneGallery(
+          photo.dataUrl,
+          photo.categoryTitle || photo.categoryType || 'swacam',
+          photo.siteName || photo.siteId || siteId
+        );
+        gallerySaved = result.success;
+      } catch (e) {
+        console.warn('Gallery save notice:', e);
+      }
+    }
+
+    if (gallerySaved) {
+      showToast(`Foto (${photo.brandTitle || 'DEPOTEL'}) tersimpan di Cloud & Galeri HP!`);
+    } else {
+      showToast(`Foto (${photo.brandTitle || 'DEPOTEL'}) tersimpan di Cloud!`);
+    }
 
     // 2. Perform Firebase Cloud Storage upload and Firestore write in background without blocking UI
     setTimeout(async () => {
