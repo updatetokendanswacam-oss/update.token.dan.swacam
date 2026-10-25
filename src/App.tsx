@@ -248,6 +248,11 @@ export default function App() {
               const finalUpdatedAt = useLocalStatus ? localSite.updatedAt : remoteSite.updatedAt;
               const finalUpdatedBy = useLocalStatus ? localSite.updatedBy : remoteSite.updatedBy;
 
+              const finalSiteId = useLocalStatus ? (localSite.siteId || remoteSite.siteId) : (remoteSite.siteId || localSite.siteId);
+              const finalSiteName = useLocalStatus ? (localSite.siteName || remoteSite.siteName) : (remoteSite.siteName || localSite.siteName);
+              const finalMeterId = useLocalStatus ? (localSite.meterId || remoteSite.meterId) : (remoteSite.meterId || localSite.meterId);
+              const finalTokens = useLocalStatus ? (localSite.tokens || remoteSite.tokens || []) : (remoteSite.tokens || localSite.tokens || []);
+
               const localPhotos = localSite.photos || [];
               const remotePhotos = remoteSite.photos || [];
 
@@ -274,6 +279,10 @@ export default function App() {
 
               return {
                 ...remoteSite,
+                siteId: finalSiteId,
+                siteName: finalSiteName,
+                meterId: finalMeterId,
+                tokens: finalTokens,
                 checked: finalChecked,
                 checkedBy: finalCheckedBy,
                 updatedAt: finalUpdatedAt,
@@ -643,22 +652,26 @@ export default function App() {
     updater: (site: SiteItem) => SiteItem
   ): UpdateCategory[] => {
     const refSite = findSiteGlobally(targetSiteId, currentCats);
+    const refCode = refSite?.siteId?.trim().toLowerCase();
+    const refMeter = refSite?.meterId?.trim();
+
     return currentCats.map((cat) => ({
       ...cat,
       sites: cat.sites.map((site) => {
         const isExactMatch = site.id === targetSiteId;
-        const isSameSiteCode =
-          refSite?.siteId &&
-          refSite.siteId.trim() !== '' &&
-          site.siteId &&
-          site.siteId.trim() !== '' &&
-          site.siteId.toLowerCase() === refSite.siteId.toLowerCase();
-        const isSameMeter =
-          refSite?.meterId &&
-          refSite.meterId.trim() !== '' &&
-          refSite.meterId !== '-' &&
-          site.meterId &&
-          site.meterId === refSite.meterId;
+        const isSameSiteCode = Boolean(
+          refCode &&
+            refCode !== '' &&
+            ((site.siteId && site.siteId.trim().toLowerCase() === refCode) ||
+              (site.siteName && site.siteName.toLowerCase().includes(refCode)))
+        );
+        const isSameMeter = Boolean(
+          refMeter &&
+            refMeter !== '' &&
+            refMeter !== '-' &&
+            site.meterId &&
+            site.meterId === refMeter
+        );
 
         if (isExactMatch || isSameSiteCode || isSameMeter) {
           return updater(site);
@@ -678,40 +691,53 @@ export default function App() {
       const userName = currentUser?.name || 'Petugas';
       const nowIso = new Date().toISOString();
 
-      const updated = updateSiteGlobally(prevCategories, targetSiteId, (site) => ({
-        ...site,
-        checked: newCheckedStatus,
-        checkedBy: newCheckedStatus ? userName : '',
-        updatedAt: nowIso,
-        updatedBy: userName,
-      }));
+      const refCode = refSite.siteId?.trim().toLowerCase();
+      const refMeter = refSite.meterId?.trim();
+      const affectedCatIds = new Set<string>();
+
+      const updated = prevCategories.map((cat) => {
+        let modified = false;
+        const sites = cat.sites.map((site) => {
+          const isExactMatch = site.id === targetSiteId;
+          const isSameSiteCode = Boolean(
+            refCode &&
+              refCode !== '' &&
+              ((site.siteId && site.siteId.trim().toLowerCase() === refCode) ||
+                (site.siteName && site.siteName.toLowerCase().includes(refCode)))
+          );
+          const isSameMeter = Boolean(
+            refMeter &&
+              refMeter !== '' &&
+              refMeter !== '-' &&
+              site.meterId &&
+              site.meterId === refMeter
+          );
+
+          if (isExactMatch || isSameSiteCode || isSameMeter) {
+            modified = true;
+            return {
+              ...site,
+              checked: newCheckedStatus,
+              checkedBy: newCheckedStatus ? userName : '',
+              updatedAt: nowIso,
+              updatedBy: userName,
+            };
+          }
+          return site;
+        });
+
+        if (modified) {
+          affectedCatIds.add(cat.id);
+        }
+
+        return { ...cat, sites };
+      });
 
       saveCategories(updated);
 
       // Non-blocking async background sync to Firestore
       setTimeout(() => {
-        const refMeter = refSite.meterId;
-        const refCode = refSite.siteId;
-
-        const affectedCategories = updated.filter((c) =>
-          c.sites.some((s) => {
-            const isExact = s.id === targetSiteId;
-            const isSameCode =
-              refCode &&
-              refCode.trim() !== '' &&
-              s.siteId &&
-              s.siteId.trim() !== '' &&
-              s.siteId.toLowerCase() === refCode.toLowerCase();
-            const isSameMeter =
-              refMeter &&
-              refMeter.trim() !== '' &&
-              refMeter !== '-' &&
-              s.meterId &&
-              s.meterId === refMeter;
-            return isExact || isSameCode || isSameMeter;
-          })
-        );
-
+        const affectedCategories = updated.filter((c) => affectedCatIds.has(c.id));
         for (const cat of affectedCategories) {
           saveCategoryToFirestore(cat).catch((err) =>
             console.warn('Firestore toggle check sync notice:', err)
@@ -726,21 +752,56 @@ export default function App() {
   // Token Management (Memperbarui nomor token tanpa mengubah status centang secara otomatis)
   const handleAddToken = useCallback((siteId: string, token: string) => {
     setCategories((prevCategories) => {
-      const updated = updateSiteGlobally(prevCategories, siteId, (site) => {
-        const currentTokens = site.tokens || [];
-        return {
-          ...site,
-          tokens: [...currentTokens, token],
-          updatedAt: new Date().toISOString(),
-          updatedBy: currentUser?.name || 'Petugas',
-        };
+      const refSite = findSiteGlobally(siteId, prevCategories);
+      const refCode = refSite?.siteId?.trim().toLowerCase();
+      const refMeter = refSite?.meterId?.trim();
+      const affectedCatIds = new Set<string>();
+      const nowIso = new Date().toISOString();
+      const userName = currentUser?.name || 'Petugas';
+
+      const updated = prevCategories.map((cat) => {
+        let modified = false;
+        const sites = cat.sites.map((site) => {
+          const isExactMatch = site.id === siteId;
+          const isSameSiteCode = Boolean(
+            refCode &&
+              refCode !== '' &&
+              ((site.siteId && site.siteId.trim().toLowerCase() === refCode) ||
+                (site.siteName && site.siteName.toLowerCase().includes(refCode)))
+          );
+          const isSameMeter = Boolean(
+            refMeter &&
+              refMeter !== '' &&
+              refMeter !== '-' &&
+              site.meterId &&
+              site.meterId === refMeter
+          );
+
+          if (isExactMatch || isSameSiteCode || isSameMeter) {
+            modified = true;
+            const currentTokens = site.tokens || [];
+            return {
+              ...site,
+              tokens: [...currentTokens, token],
+              updatedAt: nowIso,
+              updatedBy: userName,
+            };
+          }
+          return site;
+        });
+
+        if (modified) {
+          affectedCatIds.add(cat.id);
+        }
+
+        return { ...cat, sites };
       });
 
       saveCategories(updated);
 
       setTimeout(() => {
         updated.forEach((c) => {
-          if (c.sites.some((s) => s.id === siteId)) {
+          if (affectedCatIds.has(c.id)) {
             saveCategoryToFirestore(c).catch((e) => console.error('Token sync error:', e));
           }
         });
@@ -753,21 +814,56 @@ export default function App() {
 
   const handleRemoveToken = useCallback((siteId: string, tokenIndex: number) => {
     setCategories((prevCategories) => {
-      const updated = updateSiteGlobally(prevCategories, siteId, (site) => {
-        const currentTokens = site.tokens || [];
-        return {
-          ...site,
-          tokens: currentTokens.filter((_, idx) => idx !== tokenIndex),
-          updatedAt: new Date().toISOString(),
-          updatedBy: currentUser?.name || 'Petugas',
-        };
+      const refSite = findSiteGlobally(siteId, prevCategories);
+      const refCode = refSite?.siteId?.trim().toLowerCase();
+      const refMeter = refSite?.meterId?.trim();
+      const affectedCatIds = new Set<string>();
+      const nowIso = new Date().toISOString();
+      const userName = currentUser?.name || 'Petugas';
+
+      const updated = prevCategories.map((cat) => {
+        let modified = false;
+        const sites = cat.sites.map((site) => {
+          const isExactMatch = site.id === siteId;
+          const isSameSiteCode = Boolean(
+            refCode &&
+              refCode !== '' &&
+              ((site.siteId && site.siteId.trim().toLowerCase() === refCode) ||
+                (site.siteName && site.siteName.toLowerCase().includes(refCode)))
+          );
+          const isSameMeter = Boolean(
+            refMeter &&
+              refMeter !== '' &&
+              refMeter !== '-' &&
+              site.meterId &&
+              site.meterId === refMeter
+          );
+
+          if (isExactMatch || isSameSiteCode || isSameMeter) {
+            modified = true;
+            const currentTokens = site.tokens || [];
+            return {
+              ...site,
+              tokens: currentTokens.filter((_, idx) => idx !== tokenIndex),
+              updatedAt: nowIso,
+              updatedBy: userName,
+            };
+          }
+          return site;
+        });
+
+        if (modified) {
+          affectedCatIds.add(cat.id);
+        }
+
+        return { ...cat, sites };
       });
 
       saveCategories(updated);
 
       setTimeout(() => {
         updated.forEach((c) => {
-          if (c.sites.some((s) => s.id === siteId)) {
+          if (affectedCatIds.has(c.id)) {
             saveCategoryToFirestore(c).catch((e) => console.error('Token removal sync error:', e));
           }
         });
@@ -834,19 +930,52 @@ export default function App() {
         setAllPhotos((prev) => [savedPhoto, ...prev.filter((p) => p.id !== savedPhoto.id)]);
 
         setCategories((prevCategories) => {
-          const updated = updateSiteGlobally(prevCategories, siteId, (site) => {
-            const existingPhotos = site.photos || [];
-            const newPhotos = existingPhotos.map((p) => (p.id === savedPhoto.id ? savedPhoto : p));
-            return {
-              ...site,
-              photos: newPhotos,
-            };
+          const refSite = findSiteGlobally(siteId, prevCategories);
+          const refCode = refSite?.siteId?.trim().toLowerCase();
+          const refMeter = refSite?.meterId?.trim();
+          const affectedCatIds = new Set<string>();
+
+          const updated = prevCategories.map((cat) => {
+            let modified = false;
+            const sites = cat.sites.map((site) => {
+              const isExactMatch = site.id === siteId;
+              const isSameSiteCode = Boolean(
+                refCode &&
+                  refCode !== '' &&
+                  ((site.siteId && site.siteId.trim().toLowerCase() === refCode) ||
+                    (site.siteName && site.siteName.toLowerCase().includes(refCode)))
+              );
+              const isSameMeter = Boolean(
+                refMeter &&
+                  refMeter !== '' &&
+                  refMeter !== '-' &&
+                  site.meterId &&
+                  site.meterId === refMeter
+              );
+
+              if (isExactMatch || isSameSiteCode || isSameMeter) {
+                modified = true;
+                const existingPhotos = site.photos || [];
+                const newPhotos = existingPhotos.map((p) => (p.id === savedPhoto.id ? savedPhoto : p));
+                return {
+                  ...site,
+                  photos: newPhotos,
+                };
+              }
+              return site;
+            });
+
+            if (modified) {
+              affectedCatIds.add(cat.id);
+            }
+
+            return { ...cat, sites };
           });
 
           saveCategories(updated);
 
           updated.forEach((c) => {
-            if (c.sites.some((s) => s.id === siteId)) {
+            if (affectedCatIds.has(c.id)) {
               saveCategoryToFirestore(c).catch((e) => console.error('Category photo sync notice:', e));
             }
           });
@@ -898,20 +1027,57 @@ export default function App() {
 
   const handleSaveEditedSite = useCallback((updatedSite: SiteItem) => {
     setCategories((prev) => {
-      const updated = updateSiteGlobally(prev, updatedSite.id, (s) => ({
-        ...s,
-        siteId: updatedSite.siteId,
-        siteName: updatedSite.siteName,
-        meterId: updatedSite.meterId,
-        updatedAt: new Date().toISOString(),
-        updatedBy: currentUser?.name || 'Petugas',
-      }));
+      const refSite = findSiteGlobally(updatedSite.id, prev);
+      const oldCode = refSite?.siteId?.trim().toLowerCase();
+      const oldMeter = refSite?.meterId?.trim();
+      const newCode = updatedSite.siteId?.trim().toLowerCase();
+      const newMeter = updatedSite.meterId?.trim();
+      const affectedCatIds = new Set<string>();
+      const nowIso = new Date().toISOString();
+      const userName = currentUser?.name || 'Petugas';
+
+      const updated = prev.map((cat) => {
+        let modified = false;
+        const sites = cat.sites.map((site) => {
+          const isExactMatch = site.id === updatedSite.id;
+          const isSameSiteCode = Boolean(
+            (oldCode && oldCode !== '' && ((site.siteId && site.siteId.trim().toLowerCase() === oldCode) || (site.siteName && site.siteName.toLowerCase().includes(oldCode)))) ||
+            (newCode && newCode !== '' && ((site.siteId && site.siteId.trim().toLowerCase() === newCode) || (site.siteName && site.siteName.toLowerCase().includes(newCode))))
+          );
+          const isSameMeter = Boolean(
+            (oldMeter && oldMeter !== '' && oldMeter !== '-' && site.meterId && site.meterId === oldMeter) ||
+            (newMeter && newMeter !== '' && newMeter !== '-' && site.meterId && site.meterId === newMeter)
+          );
+
+          if (isExactMatch || isSameSiteCode || isSameMeter) {
+            modified = true;
+            return {
+              ...site,
+              siteId: updatedSite.siteId,
+              siteName: updatedSite.siteName,
+              meterId: updatedSite.meterId,
+              updatedAt: nowIso,
+              updatedBy: userName,
+            };
+          }
+          return site;
+        });
+
+        if (modified) {
+          affectedCatIds.add(cat.id);
+        }
+
+        return { ...cat, sites };
+      });
+
       saveCategories(updated);
+
       updated.forEach((c) => {
-        if (c.sites.some((s) => s.id === updatedSite.id)) {
-          saveCategoryToFirestore(c).catch((e) => console.error(e));
+        if (affectedCatIds.has(c.id)) {
+          saveCategoryToFirestore(c).catch((e) => console.error('Save edited site sync error:', e));
         }
       });
+
       return updated;
     });
     setEditingSite(null);
