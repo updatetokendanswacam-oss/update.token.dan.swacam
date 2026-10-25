@@ -217,8 +217,54 @@ export default function App() {
   useEffect(() => {
     const unsubscribeCats = subscribeToCategories((remoteCats) => {
       if (remoteCats && remoteCats.length > 0) {
-        setCategories(remoteCats);
-        saveCategories(remoteCats);
+        setCategories((prevCategories) => {
+          const merged = remoteCats.map((remoteCat) => {
+            const localCat = prevCategories.find((c) => c.id === remoteCat.id);
+            if (!localCat) return remoteCat;
+
+            const mergedSites = remoteCat.sites.map((remoteSite) => {
+              const localSite = localCat.sites.find((s) => s.id === remoteSite.id);
+              if (!localSite) return remoteSite;
+
+              const localPhotos = localSite.photos || [];
+              const remotePhotos = remoteSite.photos || [];
+
+              const photoMap = new Map<string, PhotoRecord>();
+
+              // Put remote photos first
+              for (const rp of remotePhotos) {
+                photoMap.set(rp.id, rp);
+              }
+
+              // Merge local photos so dataUrl and storageUrl are preserved
+              for (const lp of localPhotos) {
+                const existing = photoMap.get(lp.id);
+                if (!existing) {
+                  photoMap.set(lp.id, lp);
+                } else {
+                  photoMap.set(lp.id, {
+                    ...existing,
+                    dataUrl: existing.dataUrl || lp.dataUrl,
+                    storageUrl: existing.storageUrl || lp.storageUrl,
+                  });
+                }
+              }
+
+              return {
+                ...remoteSite,
+                photos: Array.from(photoMap.values()),
+              };
+            });
+
+            return {
+              ...remoteCat,
+              sites: mergedSites,
+            };
+          });
+
+          saveCategories(merged);
+          return merged;
+        });
       }
     });
 

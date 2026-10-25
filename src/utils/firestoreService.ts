@@ -351,8 +351,8 @@ export async function saveCategoryToFirestore(category: UpdateCategory): Promise
       meterId: p.meterId,
       storageUrl: p.storageUrl || '',
       storagePath: p.storagePath || '',
-      // Only retain dataUrl if storageUrl is missing and string is small (<50KB)
-      dataUrl: p.storageUrl ? '' : (p.dataUrl && p.dataUrl.length > 50000 ? '' : p.dataUrl),
+      // Keep dataUrl intact if storageUrl is empty so photos are never lost during category updates
+      dataUrl: p.storageUrl ? '' : (p.dataUrl || ''),
       timestamp: p.timestamp,
       capturedBy: p.capturedBy,
       capturedById: p.capturedById || '',
