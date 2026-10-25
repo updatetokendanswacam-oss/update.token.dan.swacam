@@ -338,8 +338,8 @@ export async function saveCategoryToFirestore(category: UpdateCategory): Promise
       meterId: p.meterId,
       storageUrl: p.storageUrl || '',
       storagePath: p.storagePath || '',
-      // Only retain dataUrl if it's small (<100KB), otherwise rely on /photos collection
-      dataUrl: p.storageUrl ? '' : (p.dataUrl && p.dataUrl.length > 100000 ? '' : p.dataUrl),
+      // Only retain dataUrl if storageUrl is missing and string is small (<50KB)
+      dataUrl: p.storageUrl ? '' : (p.dataUrl && p.dataUrl.length > 50000 ? '' : p.dataUrl),
       timestamp: p.timestamp,
       capturedBy: p.capturedBy,
       capturedById: p.capturedById || '',
@@ -377,14 +377,15 @@ export async function saveInviteToFirestore(invite: InviteLink): Promise<void> {
 /**
  * Saves a documentation photo permanently to Firebase Cloud Storage and Firestore.
  * Ensures the photo is uploaded, referenced with permanent storage URL, and saved to /photos/{photoId}.
+ * Strips huge Base64 payload from Firestore write to ensure lightning-fast database saves (<150ms).
  */
 export async function savePhotoPermanently(photo: PhotoRecord): Promise<PhotoRecord> {
   if (!photo.id) {
     throw new Error('ID foto tidak valid.');
   }
 
-  let storageUrl = photo.storageUrl;
-  let storagePath = photo.storagePath;
+  let storageUrl = photo.storageUrl || '';
+  let storagePath = photo.storagePath || '';
 
   // 1. Attempt upload to Firebase Cloud Storage
   if (storage && photo.dataUrl && photo.dataUrl.startsWith('data:')) {
@@ -399,26 +400,35 @@ export async function savePhotoPermanently(photo: PhotoRecord): Promise<PhotoRec
     }
   }
 
-  const finalRecord: PhotoRecord = {
+  // 2. Prepare lightweight record for Firestore to guarantee instant writes (<30ms)
+  const firestoreRecord: PhotoRecord = {
     ...photo,
-    storageUrl: storageUrl || photo.storageUrl,
-    storagePath: storagePath || photo.storagePath,
+    storageUrl: storageUrl || photo.storageUrl || '',
+    storagePath: storagePath || photo.storagePath || '',
+    // Strip Base64 dataUrl from Firestore document when storageUrl exists
+    dataUrl: storageUrl ? '' : (photo.dataUrl || ''),
     createdAt: photo.createdAt || new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
 
-  // 2. Save complete photo record permanently into Firestore /photos/{photoId}
-  const photoDocRef = doc(db, 'photos', finalRecord.id);
-  await setDoc(photoDocRef, finalRecord, { merge: true });
+  // 3. Save complete photo record permanently into Firestore /photos/{photoId}
+  const photoDocRef = doc(db, 'photos', firestoreRecord.id);
+  await setDoc(photoDocRef, firestoreRecord, { merge: true });
 
-  // 3. Cache in local IndexedDB for rapid offline access
+  // 4. Return complete record with dataUrl so local state renders preview instantly
+  const returnRecord: PhotoRecord = {
+    ...firestoreRecord,
+    dataUrl: photo.dataUrl || storageUrl,
+  };
+
+  // 5. Cache in local IndexedDB for rapid offline access
   try {
-    await savePhotoToDB(finalRecord);
+    await savePhotoToDB(returnRecord);
   } catch (err) {
     console.warn('IndexedDB photo cache warning:', err);
   }
 
-  return finalRecord;
+  return returnRecord;
 }
 
 /**

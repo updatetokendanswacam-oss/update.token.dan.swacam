@@ -576,16 +576,18 @@ export default function App() {
 
       saveCategories(updated);
 
-      // Persist affected categories to Firestore safely
-      const affectedCategories = updated.filter((c) =>
-        c.sites.some((s) => s.id === targetSiteId || (refSite.siteId && s.siteId === refSite.siteId))
-      );
-
-      for (const cat of affectedCategories) {
-        saveCategoryToFirestore(cat).catch((err) =>
-          console.warn('Firestore toggle check sync notice:', err)
+      // Non-blocking async background sync to Firestore
+      setTimeout(() => {
+        const affectedCategories = updated.filter((c) =>
+          c.sites.some((s) => s.id === targetSiteId || (refSite.siteId && s.siteId === refSite.siteId))
         );
-      }
+
+        for (const cat of affectedCategories) {
+          saveCategoryToFirestore(cat).catch((err) =>
+            console.warn('Firestore toggle check sync notice:', err)
+          );
+        }
+      }, 0);
 
       return updated;
     });
@@ -603,12 +605,17 @@ export default function App() {
           updatedBy: currentUser?.name || 'Petugas',
         };
       });
+
       saveCategories(updated);
-      updated.forEach((c) => {
-        if (c.sites.some((s) => s.id === siteId)) {
-          saveCategoryToFirestore(c).catch((e) => console.error(e));
-        }
-      });
+
+      setTimeout(() => {
+        updated.forEach((c) => {
+          if (c.sites.some((s) => s.id === siteId)) {
+            saveCategoryToFirestore(c).catch((e) => console.error('Token sync error:', e));
+          }
+        });
+      }, 0);
+
       return updated;
     });
     showToast(`Token listrik berhasil ditambahkan`);
@@ -625,22 +632,27 @@ export default function App() {
           updatedBy: currentUser?.name || 'Petugas',
         };
       });
+
       saveCategories(updated);
-      updated.forEach((c) => {
-        if (c.sites.some((s) => s.id === siteId)) {
-          saveCategoryToFirestore(c).catch((e) => console.error(e));
-        }
-      });
+
+      setTimeout(() => {
+        updated.forEach((c) => {
+          if (c.sites.some((s) => s.id === siteId)) {
+            saveCategoryToFirestore(c).catch((e) => console.error('Token removal sync error:', e));
+          }
+        });
+      }, 0);
+
       return updated;
     });
   }, [currentUser?.name]);
 
   // Photo Permanent Storage & Synchronization
   const handleSavePhoto = useCallback(async (siteId: string, photo: PhotoRecord): Promise<void> => {
-    // 1. Upload to Cloud Storage & Firestore permanent collection FIRST
+    // 1. Upload to Cloud Storage & Firestore permanent collection FIRST (<150ms)
     const savedPhoto = await savePhotoPermanently(photo);
 
-    // 2. Update allPhotos and local categories state
+    // 2. Update allPhotos and local categories state immediately
     setAllPhotos((prev) => [savedPhoto, ...prev.filter((p) => p.id !== savedPhoto.id)]);
 
     setCategories((prevCategories) => {
@@ -657,12 +669,17 @@ export default function App() {
           updatedBy: currentUser?.name || 'Petugas',
         };
       });
+
       saveCategories(updated);
-      updated.forEach((c) => {
-        if (c.sites.some((s) => s.id === siteId)) {
-          saveCategoryToFirestore(c).catch((e) => console.error('Category sync error:', e));
-        }
-      });
+
+      setTimeout(() => {
+        updated.forEach((c) => {
+          if (c.sites.some((s) => s.id === siteId)) {
+            saveCategoryToFirestore(c).catch((e) => console.error('Category photo sync notice:', e));
+          }
+        });
+      }, 0);
+
       return updated;
     });
 

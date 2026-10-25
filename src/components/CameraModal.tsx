@@ -157,7 +157,7 @@ export const CameraModal: React.FC<CameraModalProps> = ({
       setUploadSuccess(true);
       setTimeout(() => {
         onClose();
-      }, 700);
+      }, 250);
     } catch (err: any) {
       console.error('Photo save error:', err);
       setUploadError(
