@@ -37,6 +37,8 @@ export interface SiteItem {
   siteId: string;  // Site ID (e.g. EPE134, JKT763, JTX376)
   siteName: string;// Nama Site
   checked: boolean;
+  checkedBy?: string; // Nama petugas yang menceklis
+  checkedAt?: string; // ISO timestamp saat diceklis
   tokens?: string[]; // No Token Listrik (multiple tokens support)
   photos?: PhotoRecord[];
   updatedAt?: string;

@@ -659,11 +659,15 @@ export default function App() {
       if (!refSite) return prevCategories;
 
       const newCheckedStatus = !refSite.checked;
+      const checkerName = currentUser?.name || 'Petugas';
+      const nowIso = new Date().toISOString();
       const updated = updateSiteGlobally(prevCategories, targetSiteId, (site) => ({
         ...site,
         checked: newCheckedStatus,
-        updatedAt: new Date().toISOString(),
-        updatedBy: currentUser?.name || 'Petugas',
+        checkedBy: newCheckedStatus ? checkerName : undefined,
+        checkedAt: newCheckedStatus ? nowIso : undefined,
+        updatedAt: nowIso,
+        updatedBy: checkerName,
       }));
 
       saveCategories(updated);

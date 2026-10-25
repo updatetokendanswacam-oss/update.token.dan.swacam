@@ -96,7 +96,9 @@ export const SiteCard: React.FC<SiteCardProps> = React.memo(({
                       : 'bg-red-950 text-red-300 border border-red-800'
                   }`}
                 >
-                  {site.checked ? 'SUDAH' : 'BELUM'}
+                  {site.checked
+                    ? `SUDAH (${site.checkedBy || site.updatedBy || 'Petugas'})`
+                    : 'BELUM'}
                 </span>
               </div>
 
