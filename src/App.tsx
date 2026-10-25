@@ -1025,66 +1025,67 @@ export default function App() {
     setEditingSite(site);
   }, []);
 
-  const handleSaveEditedSite = useCallback((updatedSite: SiteItem) => {
-    setCategories((prev) => {
-      const refSite = findSiteGlobally(updatedSite.id, prev);
-      const oldCode = refSite?.siteId?.trim().toLowerCase();
-      const oldMeter = refSite?.meterId?.trim();
-      const newCode = updatedSite.siteId?.trim().toLowerCase();
-      const newMeter = updatedSite.meterId?.trim();
-      const affectedCatIds = new Set<string>();
-      const nowIso = new Date().toISOString();
-      const userName = currentUser?.name || 'Petugas';
+  const handleSaveEditedSite = useCallback(async (updatedSite: SiteItem) => {
+    const oldRefSite = findSiteGlobally(updatedSite.id, categories);
+    const oldCode = oldRefSite?.siteId?.trim().toLowerCase();
+    const oldMeter = oldRefSite?.meterId?.trim();
+    const newCode = updatedSite.siteId?.trim().toLowerCase();
+    const newMeter = updatedSite.meterId?.trim();
+    const nowIso = new Date().toISOString();
+    const userName = currentUser?.name || 'Petugas';
 
-      const updated = prev.map((cat) => {
-        let modified = false;
-        const sites = cat.sites.map((site) => {
-          const isExactMatch = site.id === updatedSite.id;
-          const isSameSiteCode = Boolean(
-            (oldCode && oldCode !== '' && ((site.siteId && site.siteId.trim().toLowerCase() === oldCode) || (site.siteName && site.siteName.toLowerCase().includes(oldCode)))) ||
-            (newCode && newCode !== '' && ((site.siteId && site.siteId.trim().toLowerCase() === newCode) || (site.siteName && site.siteName.toLowerCase().includes(newCode))))
-          );
-          const isSameMeter = Boolean(
-            (oldMeter && oldMeter !== '' && oldMeter !== '-' && site.meterId && site.meterId === oldMeter) ||
-            (newMeter && newMeter !== '' && newMeter !== '-' && site.meterId && site.meterId === newMeter)
-          );
+    const affectedCatIds = new Set<string>();
 
-          if (isExactMatch || isSameSiteCode || isSameMeter) {
-            modified = true;
-            return {
-              ...site,
-              siteId: updatedSite.siteId,
-              siteName: updatedSite.siteName,
-              meterId: updatedSite.meterId,
-              updatedAt: nowIso,
-              updatedBy: userName,
-            };
-          }
-          return site;
-        });
+    const updated = categories.map((cat) => {
+      let modified = false;
+      const sites = cat.sites.map((site) => {
+        const isExactMatch = site.id === updatedSite.id;
+        const isSameSiteCode = Boolean(
+          (oldCode && oldCode !== '' && ((site.siteId && site.siteId.trim().toLowerCase() === oldCode) || (site.siteName && site.siteName.toLowerCase().includes(oldCode)))) ||
+          (newCode && newCode !== '' && ((site.siteId && site.siteId.trim().toLowerCase() === newCode) || (site.siteName && site.siteName.toLowerCase().includes(newCode))))
+        );
+        const isSameMeter = Boolean(
+          (oldMeter && oldMeter !== '' && oldMeter !== '-' && site.meterId && site.meterId === oldMeter) ||
+          (newMeter && newMeter !== '' && newMeter !== '-' && site.meterId && site.meterId === newMeter)
+        );
 
-        if (modified) {
-          affectedCatIds.add(cat.id);
+        if (isExactMatch || isSameSiteCode || isSameMeter) {
+          modified = true;
+          return {
+            ...site,
+            siteId: updatedSite.siteId,
+            siteName: updatedSite.siteName,
+            meterId: updatedSite.meterId,
+            updatedAt: nowIso,
+            updatedBy: userName,
+          };
         }
-
-        return { ...cat, sites };
+        return site;
       });
 
-      saveCategories(updated);
+      if (modified) {
+        affectedCatIds.add(cat.id);
+      }
 
-      updated.forEach((c) => {
-        if (affectedCatIds.has(c.id)) {
-          saveCategoryToFirestore(c).catch((e) => console.error('Save edited site sync error:', e));
-        }
-      });
-
-      return updated;
+      return { ...cat, sites };
     });
-    setEditingSite(null);
-    showToast(`Data site ${updatedSite.siteId} berhasil diperbarui di semua kategori`);
-  }, [currentUser?.name, showToast]);
 
-  const handleAddSite = useCallback((siteData: { meterId: string; siteId: string; siteName: string }) => {
+    try {
+      const affectedCats = updated.filter((c) => affectedCatIds.has(c.id));
+      for (const cat of affectedCats) {
+        await saveCategoryToFirestore(cat);
+      }
+      setCategories(updated);
+      saveCategories(updated);
+      setEditingSite(null);
+      showToast(`Data site ${updatedSite.siteId} berhasil diperbarui permanen di database`);
+    } catch (err: any) {
+      console.error('Error saving edited site to Firestore:', err);
+      showToast(`Gagal memperbarui site di database: ${err?.message || err}`);
+    }
+  }, [categories, currentUser?.name, showToast]);
+
+  const handleAddSite = useCallback(async (siteData: { meterId: string; siteId: string; siteName: string }) => {
     const newSite: SiteItem = {
       id: `site-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
       meterId: siteData.meterId,
@@ -1097,25 +1098,33 @@ export default function App() {
       updatedBy: currentUser?.name || 'Petugas',
     };
 
-    setCategories((prev) => {
-      const updated = prev.map((cat) => {
-        if (cat.id !== selectedCategoryId) return cat;
-        return {
-          ...cat,
-          sites: [...cat.sites, newSite],
-        };
-      });
-      saveCategories(updated);
-      const targetCat = updated.find((c) => c.id === selectedCategoryId);
-      if (targetCat) {
-        saveCategoryToFirestore(targetCat).catch((err) => console.error(err));
-      }
-      return updated;
-    });
+    const targetCategory = categories.find((c) => c.id === selectedCategoryId);
+    if (!targetCategory) {
+      showToast('Kategori tujuan tidak ditemukan.');
+      return;
+    }
 
-    setShowAddSiteModal(false);
-    showToast(`Site ${newSite.siteId} berhasil ditambahkan ke daftar`);
-  }, [selectedCategoryId, currentUser?.name, showToast]);
+    const updatedCategory: UpdateCategory = {
+      ...targetCategory,
+      sites: [...targetCategory.sites, newSite],
+    };
+
+    try {
+      await saveCategoryToFirestore(updatedCategory);
+
+      const updatedCategories = categories.map((cat) =>
+        cat.id === selectedCategoryId ? updatedCategory : cat
+      );
+
+      setCategories(updatedCategories);
+      saveCategories(updatedCategories);
+      setShowAddSiteModal(false);
+      showToast(`Site ${newSite.siteId} berhasil ditambahkan permanen ke database`);
+    } catch (err: any) {
+      console.error('Error adding site to Firestore:', err);
+      showToast(`Gagal menambahkan site ke database: ${err?.message || err}`);
+    }
+  }, [categories, selectedCategoryId, currentUser?.name, showToast]);
 
   const handleDeleteSite = useCallback((siteId: string) => {
     let foundCategory = categories.find((c) => c.id === selectedCategoryId);
@@ -1152,53 +1161,58 @@ export default function App() {
     setEditingCategory(cat);
   }, [currentUser?.role, showToast]);
 
-  const handleUpdateSiteCount = useCallback((categoryId: string, newTotal: number) => {
+  const handleUpdateSiteCount = useCallback(async (categoryId: string, newTotal: number) => {
     if (currentUser?.role !== 'admin') {
       showToast('Akses ditolak: Hanya Administrator yang berwenang mengubah jumlah site.');
       return;
     }
-    setCategories((prev) => {
-      const updated = prev.map((cat) => {
-        if (cat.id !== categoryId) return cat;
-        const currentCount = cat.sites.length;
-        if (newTotal === currentCount) return cat;
 
-        if (newTotal < currentCount) {
+    const targetCat = categories.find((c) => c.id === categoryId);
+    if (!targetCat) return;
+
+    const currentCount = targetCat.sites.length;
+    if (newTotal === currentCount) return;
+
+    let newSites: SiteItem[] = [];
+    if (newTotal < currentCount) {
+      newSites = targetCat.sites.slice(0, newTotal);
+    } else {
+      const additionalCount = newTotal - currentCount;
+      const additionalSites: SiteItem[] = Array.from({ length: additionalCount }).map(
+        (_, idx) => {
+          const num = currentCount + idx + 1;
           return {
-            ...cat,
-            sites: cat.sites.slice(0, newTotal),
-          };
-        } else {
-          const additionalCount = newTotal - currentCount;
-          const additionalSites: SiteItem[] = Array.from({ length: additionalCount }).map(
-            (_, idx) => {
-              const num = currentCount + idx + 1;
-              return {
-                id: `site-exp-${Date.now()}-${num}`,
-                meterId: (538720000000 + num * 97).toString(),
-                siteId: `EXP${num.toString().padStart(3, '0')}`,
-                siteName: `Site Tambahan ${num}`,
-                checked: false,
-                tokens: [],
-                photos: [],
-              };
-            }
-          );
-          return {
-            ...cat,
-            sites: [...cat.sites, ...additionalSites],
+            id: `site-exp-${Date.now()}-${num}`,
+            meterId: (538720000000 + num * 97).toString(),
+            siteId: `EXP${num.toString().padStart(3, '0')}`,
+            siteName: `Site Tambahan ${num}`,
+            checked: false,
+            tokens: [],
+            photos: [],
+            updatedAt: new Date().toISOString(),
+            updatedBy: currentUser?.name || 'Petugas',
           };
         }
-      });
-      saveCategories(updated);
-      const targetCat = updated.find((c) => c.id === categoryId);
-      if (targetCat) {
-        saveCategoryToFirestore(targetCat).catch((e) => console.error(e));
-      }
-      return updated;
-    });
-    showToast(`Total site berhasil disesuaikan menjadi ${newTotal}`);
-  }, [currentUser?.role, showToast]);
+      );
+      newSites = [...targetCat.sites, ...additionalSites];
+    }
+
+    const updatedCategory: UpdateCategory = {
+      ...targetCat,
+      sites: newSites,
+    };
+
+    try {
+      await saveCategoryToFirestore(updatedCategory);
+      const updatedCategories = categories.map((c) => (c.id === categoryId ? updatedCategory : c));
+      setCategories(updatedCategories);
+      saveCategories(updatedCategories);
+      showToast(`Total site berhasil disesuaikan menjadi ${newTotal} dan disimpan ke database`);
+    } catch (err: any) {
+      console.error('Error updating site count in Firestore:', err);
+      showToast(`Gagal memperbarui jumlah site di database: ${err?.message || err}`);
+    }
+  }, [categories, currentUser?.role, currentUser?.name, showToast]);
 
   const handleDeleteCategory = useCallback((categoryId: string) => {
     if (currentUser?.role !== 'admin') {
@@ -1213,50 +1227,64 @@ export default function App() {
     });
   }, [categories, currentUser?.role, showToast]);
 
-  const handleConfirmDelete = useCallback(() => {
+  const handleConfirmDelete = useCallback(async () => {
     if (!deleteModalState) return;
 
     if (deleteModalState.type === 'site' && deleteModalState.site) {
       const siteId = deleteModalState.site.id;
       const targetCatId = deleteModalState.category?.id || selectedCategoryId;
+      const siteName = deleteModalState.site.siteId || deleteModalState.site.siteName;
 
-      setCategories((prev) => {
-        const updated = prev.map((cat) => {
-          if (targetCatId && cat.id !== targetCatId) return cat;
-          return {
-            ...cat,
-            sites: cat.sites.filter((s) => s.id !== siteId),
-          };
-        });
-        saveCategories(updated);
-
-        // Sync affected categories to Firestore safely
-        const affectedCats = updated.filter((c) => !targetCatId || c.id === targetCatId);
-        affectedCats.forEach((c) => {
-          saveCategoryToFirestore(c).catch((err) =>
-            console.error('Firestore delete site sync error:', err)
-          );
-        });
-
-        return updated;
+      // Identify categories from which the site should be removed
+      const updatedCategories = categories.map((cat) => {
+        if (targetCatId && cat.id !== targetCatId) return cat;
+        return {
+          ...cat,
+          sites: cat.sites.filter((s) => s.id !== siteId),
+        };
       });
-      showToast(`Site ${deleteModalState.site.siteId || deleteModalState.site.siteName} berhasil dihapus`);
+
+      const affectedCategories = updatedCategories.filter(
+        (c) => !targetCatId || c.id === targetCatId
+      );
+
+      try {
+        // Save deletion permanently to Firestore BEFORE updating UI state
+        for (const cat of affectedCategories) {
+          await saveCategoryToFirestore(cat);
+        }
+
+        // Now commit update to React state & localStorage permanently
+        setCategories(updatedCategories);
+        saveCategories(updatedCategories);
+        showToast(`Site ${siteName} berhasil dihapus permanen dari database`);
+      } catch (err: any) {
+        console.error('Error deleting site from Firestore:', err);
+        showToast(`Gagal menghapus site dari database: ${err?.message || err}`);
+      }
     } else if (deleteModalState.type === 'category' && deleteModalState.category) {
       const catId = deleteModalState.category.id;
-      setCategories((prev) => {
-        const remaining = prev.filter((c) => c.id !== catId);
-        if (selectedCategoryId === catId && remaining.length > 0) {
-          setSelectedCategoryId(remaining[0].id);
+      const catTitle = deleteModalState.category.title;
+
+      try {
+        // Save category deletion permanently to Firestore BEFORE updating UI state
+        await deleteCategoryFromFirestore(catId);
+
+        const remainingCategories = categories.filter((c) => c.id !== catId);
+        if (selectedCategoryId === catId && remainingCategories.length > 0) {
+          setSelectedCategoryId(remainingCategories[0].id);
         }
-        saveCategories(remaining);
-        deleteCategoryFromFirestore(catId).catch((err) => console.error(err));
-        return remaining;
-      });
-      showToast(`Kategori "${deleteModalState.category.title}" berhasil dihapus`);
+        setCategories(remainingCategories);
+        saveCategories(remainingCategories);
+        showToast(`Kategori "${catTitle}" berhasil dihapus permanen dari database`);
+      } catch (err: any) {
+        console.error('Error deleting category from Firestore:', err);
+        showToast(`Gagal menghapus kategori dari database: ${err?.message || err}`);
+      }
     }
 
     setDeleteModalState(null);
-  }, [deleteModalState, selectedCategoryId, showToast]);
+  }, [deleteModalState, selectedCategoryId, categories, showToast]);
 
   // User Management with Firestore Persistence and Server-side authorization check
   const handleAddUser = async (partialUser: Partial<User>): Promise<void> => {

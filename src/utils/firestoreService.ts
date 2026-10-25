@@ -13,7 +13,7 @@ import {
 import { ref, uploadString, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { User as FirebaseUser } from 'firebase/auth';
 import { db, storage } from '../firebase';
-import { UpdateCategory, User, InviteLink, PhotoRecord } from '../types';
+import { UpdateCategory, User, InviteLink, PhotoRecord, SiteItem } from '../types';
 import { INITIAL_CATEGORIES, INITIAL_USERS } from './initialData';
 import { savePhotoToDB, deletePhotoFromDB } from './storage';
 
@@ -338,46 +338,77 @@ export async function seedInitialCategories(): Promise<void> {
  * to strictly prevent exceeding Firestore's 1MB document limit.
  */
 export async function saveCategoryToFirestore(category: UpdateCategory): Promise<void> {
+  if (!category || !category.id) {
+    throw new Error('ID Kategori tidak valid.');
+  }
+
   const catRef = doc(db, 'categories', category.id);
 
   // Store lightweight photo metadata inside site objects so the category document stays small,
   // while the full high-resolution image data is stored securely in /photos/{photoId} collection.
-  const sanitizedSites = category.sites.map((s) => ({
-    ...s,
+  const sanitizedSites: SiteItem[] = (category.sites || []).map((s) => ({
+    id: s.id,
+    meterId: s.meterId || '',
+    siteId: s.siteId || '',
+    siteName: s.siteName || '',
+    checked: Boolean(s.checked),
     checkedBy: s.checked ? (s.checkedBy || s.updatedBy || '') : '',
+    tokens: Array.isArray(s.tokens) ? s.tokens : [],
+    updatedAt: s.updatedAt || new Date().toISOString(),
+    updatedBy: s.updatedBy || '',
     photos: (s.photos || []).map((p) => ({
       id: p.id,
-      siteId: p.siteId,
-      siteName: p.siteName,
-      meterId: p.meterId,
+      siteId: p.siteId || s.id,
+      siteName: p.siteName || s.siteName || '',
+      meterId: p.meterId || s.meterId || '',
       storageUrl: p.storageUrl || '',
       storagePath: p.storagePath || '',
-      // Keep dataUrl intact if storageUrl is empty so photos are never lost during category updates
       dataUrl: p.storageUrl ? '' : (p.dataUrl || ''),
-      timestamp: p.timestamp,
-      capturedBy: p.capturedBy,
+      timestamp: p.timestamp || new Date().toISOString(),
+      capturedBy: p.capturedBy || '',
       capturedById: p.capturedById || '',
-      formattedTime: p.formattedTime,
+      formattedTime: p.formattedTime || '',
       categoryType: p.categoryType,
-      categoryTitle: p.categoryTitle,
-      brandTitle: p.brandTitle,
+      categoryTitle: p.categoryTitle || '',
+      brandTitle: p.brandTitle || '',
     })),
   }));
 
   const sanitizedCategory: UpdateCategory = {
-    ...category,
+    id: category.id,
+    title: category.title || '',
+    period: category.period || '',
+    type: category.type || 'swacam',
     sites: sanitizedSites,
+    allowCamera: category.allowCamera ?? true,
+    allowTokenInput: category.allowTokenInput ?? false,
   };
 
-  await setDoc(catRef, sanitizedCategory, { merge: true });
+  // Convert undefined fields to clean JSON structure so setDoc never throws on undefined values
+  const cleanedPayload = JSON.parse(JSON.stringify(sanitizedCategory));
+
+  try {
+    await setDoc(catRef, cleanedPayload, { merge: true });
+  } catch (err: any) {
+    console.error(`Error saving category ${category.id} to Firestore:`, err);
+    throw new Error(err?.message || 'Gagal menyimpan data kategori ke database.');
+  }
 }
 
 /**
  * Delete a category from Firestore
  */
 export async function deleteCategoryFromFirestore(categoryId: string): Promise<void> {
+  if (!categoryId) {
+    throw new Error('ID Kategori tidak valid.');
+  }
   const catRef = doc(db, 'categories', categoryId);
-  await deleteDoc(catRef);
+  try {
+    await deleteDoc(catRef);
+  } catch (err: any) {
+    console.error(`Error deleting category ${categoryId} from Firestore:`, err);
+    throw new Error(err?.message || 'Gagal menghapus kategori dari database.');
+  }
 }
 
 /**
