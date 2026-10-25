@@ -14,7 +14,7 @@
         "createdAt": { "type": "string", "description": "Creation timestamp" },
         "lastLoginAt": { "type": "string", "description": "Last login timestamp" }
       },
-      "required": ["id", "name", "role", "email"]
+      "required": ["id", "name", "role"]
     },
     "Admin": {
       "title": "Admin",

@@ -1,5 +1,21 @@
 import React, { useState } from 'react';
-import { X, UserPlus, Shield, Trash2, Edit2, AlertTriangle, Link as LinkIcon, Copy, Check, Share2, Search } from 'lucide-react';
+import {
+  X,
+  UserPlus,
+  Shield,
+  Trash2,
+  Edit2,
+  AlertTriangle,
+  Link as LinkIcon,
+  Copy,
+  Check,
+  Share2,
+  Search,
+  Loader2,
+  AlertCircle,
+  Save,
+  CheckCircle2,
+} from 'lucide-react';
 import { User, UserRole, InviteLink } from '../types';
 
 interface UserManagementModalProps {
@@ -7,9 +23,9 @@ interface UserManagementModalProps {
   currentUser: User | null;
   invites: InviteLink[];
   onClose: () => void;
-  onAddUser: (user: Partial<User>) => void;
-  onUpdateUser: (user: User) => void;
-  onDeleteUser: (userId: string, permanent: boolean) => void;
+  onAddUser: (user: Partial<User>) => Promise<void>;
+  onUpdateUser: (user: User) => Promise<void>;
+  onDeleteUser: (userId: string, permanent: boolean) => Promise<void>;
   onCreateInvite: (role: UserRole) => InviteLink;
 }
 
@@ -34,9 +50,16 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
   const [newEmail, setNewEmail] = useState('');
   const [newRole, setNewRole] = useState<UserRole>('user');
 
+  // Async submission states & feedback
+  const [isSubmittingAdd, setIsSubmittingAdd] = useState(false);
+  const [isSubmittingEdit, setIsSubmittingEdit] = useState(false);
+  const [isSubmittingDelete, setIsSubmittingDelete] = useState(false);
+
+  const [generalSuccess, setGeneralSuccess] = useState<string | null>(null);
+  const [generalError, setGeneralError] = useState<string | null>(null);
+
   // Invite state
   const [copiedLink, setCopiedLink] = useState<string | null>(null);
-  const [inviteFeedback, setInviteFeedback] = useState<string | null>(null);
 
   if (currentUser?.role !== 'admin') {
     return (
@@ -65,62 +88,139 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
     (u.email && u.email.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
-  const handleAddUserSubmit = (e: React.FormEvent) => {
+  const showSuccessFeedback = (msg: string) => {
+    setGeneralSuccess(msg);
+    setGeneralError(null);
+    setTimeout(() => setGeneralSuccess(null), 4000);
+  };
+
+  const showErrorFeedback = (msg: string) => {
+    setGeneralError(msg);
+    setGeneralSuccess(null);
+  };
+
+  const handleAddUserSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newName.trim()) {
-      setInviteFeedback('Nama anggota wajib diisi');
+    setGeneralError(null);
+    setGeneralSuccess(null);
+
+    const cleanName = newName.trim();
+    if (!cleanName || cleanName.length < 2) {
+      showErrorFeedback('Nama anggota minimal harus 2 karakter.');
       return;
     }
 
-    onAddUser({
-      name: newName.trim(),
-      email: newEmail.trim() || undefined,
-      role: newRole,
-      status: 'active',
-      avatar: '/logo.png',
-      isOnline: false,
-      lastSeen: 'Baru ditambahkan',
-    });
+    const cleanEmail = newEmail.trim();
+    if (cleanEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+      showErrorFeedback('Format email Google tidak valid.');
+      return;
+    }
 
-    setNewName('');
-    setNewEmail('');
-    setNewRole('user');
-    setIsAddingUser(false);
-    setInviteFeedback('Anggota baru berhasil ditambahkan.');
+    // Check if name already registered
+    const duplicate = users.find(
+      (u) => u.name.trim().toLowerCase() === cleanName.toLowerCase()
+    );
+    if (duplicate) {
+      showErrorFeedback(`Anggota dengan nama "${cleanName}" sudah terdaftar dalam sistem.`);
+      return;
+    }
+
+    setIsSubmittingAdd(true);
+    try {
+      await onAddUser({
+        name: cleanName,
+        email: cleanEmail || undefined,
+        role: newRole,
+        status: 'active',
+        avatar: '/logo.png',
+        isOnline: false,
+        lastSeen: 'Baru ditambahkan',
+      });
+
+      // Clear input only upon confirmed successful save
+      setNewName('');
+      setNewEmail('');
+      setNewRole('user');
+      setIsAddingUser(false);
+      showSuccessFeedback(`Anggota "${cleanName}" berhasil disimpan permanen ke database!`);
+    } catch (err: any) {
+      // Keep inputs intact so user can retry without re-typing
+      showErrorFeedback(
+        err?.message || 'Gagal menyimpan anggota ke database. Periksa koneksi internet lalu coba lagi.'
+      );
+    } finally {
+      setIsSubmittingAdd(false);
+    }
   };
 
-  const handleEditUserSubmit = (e: React.FormEvent) => {
+  const handleEditUserSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingUser) return;
-    onUpdateUser(editingUser);
-    setEditingUser(null);
-    setInviteFeedback('Data anggota berhasil diperbarui.');
+    setGeneralError(null);
+    setGeneralSuccess(null);
+
+    const cleanName = editingUser.name.trim();
+    if (!cleanName || cleanName.length < 2) {
+      showErrorFeedback('Nama anggota minimal 2 karakter.');
+      return;
+    }
+
+    setIsSubmittingEdit(true);
+    try {
+      await onUpdateUser({
+        ...editingUser,
+        name: cleanName,
+        email: editingUser.email ? editingUser.email.trim() : undefined,
+      });
+      const savedName = cleanName;
+      setEditingUser(null);
+      showSuccessFeedback(`Data anggota "${savedName}" berhasil disimpan ke database!`);
+    } catch (err: any) {
+      showErrorFeedback(err?.message || 'Gagal menyimpan perubahan ke database.');
+    } finally {
+      setIsSubmittingEdit(false);
+    }
   };
 
-  const handleConfirmDelete = (permanent: boolean) => {
+  const handleConfirmDelete = async (permanent: boolean) => {
     if (!deletingUser) return;
+    setGeneralError(null);
+    setGeneralSuccess(null);
+
     if (deletingUser.id === currentUser?.id) {
-      setInviteFeedback('Anda tidak dapat menghapus akun Anda sendiri.');
+      showErrorFeedback('Anda tidak dapat menghapus akun Anda sendiri.');
       setDeletingUser(null);
       return;
     }
 
     const adminCount = users.filter((u) => u.role === 'admin' && u.status === 'active').length;
     if (deletingUser.role === 'admin' && adminCount <= 1) {
-      setInviteFeedback('Tidak dapat menghapus administrator terakhir dari sistem.');
+      showErrorFeedback('Tidak dapat menghapus administrator terakhir dari sistem.');
       setDeletingUser(null);
       return;
     }
 
-    onDeleteUser(deletingUser.id, permanent);
-    setDeletingUser(null);
-    setInviteFeedback('Akun anggota telah dihapus.');
+    const targetName = deletingUser.name;
+    setIsSubmittingDelete(true);
+    try {
+      await onDeleteUser(deletingUser.id, permanent);
+      setDeletingUser(null);
+      showSuccessFeedback(
+        permanent
+          ? `Akun "${targetName}" berhasil dihapus permanen dari database.`
+          : `Akun "${targetName}" berhasil dinonaktifkan di database.`
+      );
+    } catch (err: any) {
+      showErrorFeedback(err?.message || 'Gagal menghapus data dari database.');
+    } finally {
+      setIsSubmittingDelete(false);
+    }
   };
 
   const handleGenerateInvite = (role: UserRole) => {
-    onCreateInvite(role);
-    setInviteFeedback(`Link undangan berhasil dibuat untuk role: ${role.toUpperCase()}`);
-    setTimeout(() => setInviteFeedback(null), 3000);
+    const inv = onCreateInvite(role);
+    showSuccessFeedback(`Link undangan berhasil dibuat untuk role: ${role.toUpperCase()}`);
+    return inv;
   };
 
   const copyToClipboard = async (text: string, id: string) => {
@@ -147,8 +247,10 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
               <Shield className="w-6 h-6" />
             </div>
             <div>
-              <h3 className="text-lg font-bold text-[#1e2238]">Kelola Pengguna & Hak Akses</h3>
-              <p className="text-xs text-slate-500">Pengaturan Anggota Tim DEPOTEL & Tautan Undangan</p>
+              <h3 className="text-lg font-bold text-[#1e2238]">Kelola Tim & Hak Akses</h3>
+              <p className="text-xs text-slate-500">
+                Penyimpanan Permanen Anggota Tim DEPOTEL & Pengaturan Akses
+              </p>
             </div>
           </div>
           <button
@@ -159,8 +261,23 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
           </button>
         </div>
 
+        {/* Global Feedback Banner */}
+        {generalSuccess && (
+          <div className="mt-3 p-3 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold flex items-center gap-2 animate-in fade-in">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span>{generalSuccess}</span>
+          </div>
+        )}
+
+        {generalError && (
+          <div className="mt-3 p-3 rounded-2xl bg-red-50 border border-red-200 text-red-800 text-xs font-semibold flex items-center gap-2 animate-in fade-in">
+            <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+            <span>{generalError}</span>
+          </div>
+        )}
+
         {/* Tab switchers */}
-        <div className="flex items-center gap-2 pt-4 pb-2">
+        <div className="flex items-center gap-2 pt-3 pb-2">
           <button
             onClick={() => setActiveTab('members')}
             className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition cursor-pointer ${
@@ -184,7 +301,7 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
         </div>
 
         {/* Main Content */}
-        <div className="my-3 flex-1 overflow-y-auto pr-1">
+        <div className="my-2 flex-1 overflow-y-auto pr-1">
           {activeTab === 'members' ? (
             <div className="space-y-4">
               {/* Search bar & Add Button */}
@@ -202,7 +319,11 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
 
                 {!isAddingUser && (
                   <button
-                    onClick={() => setIsAddingUser(true)}
+                    onClick={() => {
+                      setIsAddingUser(true);
+                      setGeneralError(null);
+                      setGeneralSuccess(null);
+                    }}
                     className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-[#1e2238] hover:bg-[#2b304f] text-white text-xs font-bold shadow transition cursor-pointer"
                   >
                     <UserPlus className="w-4 h-4" />
@@ -215,51 +336,101 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
               {isAddingUser && (
                 <form
                   onSubmit={handleAddUserSubmit}
-                  className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3 animate-in fade-in"
+                  className="p-4 rounded-2xl bg-slate-50 border-2 border-blue-200 shadow-xs space-y-3 animate-in fade-in"
                 >
                   <div className="flex items-center justify-between pb-2 border-b border-slate-200">
-                    <span className="text-xs font-bold text-slate-700 uppercase tracking-wide">
-                      Form Anggota Baru:
+                    <span className="text-xs font-bold text-slate-800 uppercase tracking-wide flex items-center gap-1.5">
+                      <UserPlus className="w-3.5 h-3.5 text-blue-600" />
+                      <span>Form Tambah Anggota Tim (Tersimpan ke Database):</span>
                     </span>
                     <button
                       type="button"
-                      onClick={() => setIsAddingUser(false)}
-                      className="text-xs text-slate-500 hover:text-slate-800 cursor-pointer"
+                      disabled={isSubmittingAdd}
+                      onClick={() => {
+                        setIsAddingUser(false);
+                        setGeneralError(null);
+                      }}
+                      className="text-xs text-slate-500 hover:text-slate-800 cursor-pointer disabled:opacity-50"
                     >
                       Batal
                     </button>
                   </div>
+
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                    <input
-                      type="text"
-                      value={newName}
-                      onChange={(e) => setNewName(e.target.value)}
-                      placeholder="Nama Lengkap (Wajib)"
-                      className="px-3 py-2 rounded-xl border border-slate-300 text-xs text-slate-800 focus:outline-none focus:border-blue-500 bg-white"
-                      required
-                    />
-                    <input
-                      type="email"
-                      value={newEmail}
-                      onChange={(e) => setNewEmail(e.target.value)}
-                      placeholder="Email Google (Opsional)"
-                      className="px-3 py-2 rounded-xl border border-slate-300 text-xs text-slate-800 focus:outline-none focus:border-blue-500 bg-white"
-                    />
-                    <select
-                      value={newRole}
-                      onChange={(e) => setNewRole(e.target.value as UserRole)}
-                      className="px-3 py-2 rounded-xl border border-slate-300 text-xs text-slate-800 focus:outline-none focus:border-blue-500 bg-white"
-                    >
-                      <option value="user">Petugas Lapangan (User)</option>
-                      <option value="admin">Administrator (Admin)</option>
-                    </select>
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-600 mb-1">
+                        Nama Lengkap *
+                      </label>
+                      <input
+                        type="text"
+                        value={newName}
+                        disabled={isSubmittingAdd}
+                        onChange={(e) => {
+                          setNewName(e.target.value);
+                          if (generalError) setGeneralError(null);
+                        }}
+                        placeholder="Contoh: Budi Santoso"
+                        className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs text-slate-800 focus:outline-none focus:border-blue-500 bg-white disabled:bg-slate-100"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-600 mb-1">
+                        Email Google (Opsional)
+                      </label>
+                      <input
+                        type="email"
+                        value={newEmail}
+                        disabled={isSubmittingAdd}
+                        onChange={(e) => {
+                          setNewEmail(e.target.value);
+                          if (generalError) setGeneralError(null);
+                        }}
+                        placeholder="email@gmail.com"
+                        className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs text-slate-800 focus:outline-none focus:border-blue-500 bg-white disabled:bg-slate-100"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-600 mb-1">
+                        Role / Hak Akses *
+                      </label>
+                      <select
+                        value={newRole}
+                        disabled={isSubmittingAdd}
+                        onChange={(e) => setNewRole(e.target.value as UserRole)}
+                        className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs text-slate-800 focus:outline-none focus:border-blue-500 bg-white disabled:bg-slate-100"
+                      >
+                        <option value="user">Petugas Lapangan (User)</option>
+                        <option value="admin">Administrator (Admin)</option>
+                      </select>
+                    </div>
                   </div>
+
                   <div className="flex justify-end gap-2 pt-2">
                     <button
-                      type="submit"
-                      className="px-4 py-2 rounded-xl bg-[#1e2238] hover:bg-[#2b304f] text-white text-xs font-bold transition cursor-pointer"
+                      type="button"
+                      disabled={isSubmittingAdd}
+                      onClick={() => setIsAddingUser(false)}
+                      className="px-3.5 py-2 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-semibold cursor-pointer disabled:opacity-50"
                     >
-                      Simpan Anggota
+                      Batal
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isSubmittingAdd || !newName.trim()}
+                      className="px-5 py-2 rounded-xl bg-[#1e2238] hover:bg-[#2b304f] text-white text-xs font-bold transition flex items-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow"
+                    >
+                      {isSubmittingAdd ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-400" />
+                          <span>Menyimpan ke Database...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Save className="w-3.5 h-3.5 text-emerald-400" />
+                          <span>Simpan Anggota</span>
+                        </>
+                      )}
                     </button>
                   </div>
                 </form>
@@ -274,7 +445,7 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
                   return (
                     <div
                       key={user.id}
-                      className="flex items-center justify-between p-3 rounded-2xl bg-white border border-slate-200/90 hover:border-slate-300 transition"
+                      className="flex items-center justify-between p-3 rounded-2xl bg-white border border-slate-200/90 hover:border-slate-300 transition shadow-xs"
                     >
                       <div className="flex items-center gap-3 min-w-0 flex-1">
                         <img
@@ -313,7 +484,11 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
                       {/* Right Action Icons: Edit button right beside Delete button */}
                       <div className="flex items-center gap-1.5 shrink-0 ml-3">
                         <button
-                          onClick={() => setEditingUser(user)}
+                          onClick={() => {
+                            setEditingUser(user);
+                            setGeneralError(null);
+                            setGeneralSuccess(null);
+                          }}
                           title={`Edit ${user.name}`}
                           className="p-2 rounded-xl text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition cursor-pointer"
                         >
@@ -321,7 +496,11 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
                         </button>
 
                         <button
-                          onClick={() => setDeletingUser(user)}
+                          onClick={() => {
+                            setDeletingUser(user);
+                            setGeneralError(null);
+                            setGeneralSuccess(null);
+                          }}
                           title={`Hapus / Nonaktifkan ${user.name}`}
                           disabled={isCurrent}
                           className={`p-2 rounded-xl transition cursor-pointer ${
@@ -365,9 +544,6 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
                     <span>+ Buat Link Administrator</span>
                   </button>
                 </div>
-                {inviteFeedback && (
-                  <p className="text-xs text-emerald-600 font-semibold mt-2.5">{inviteFeedback}</p>
-                )}
               </div>
 
               {/* Invites List */}
@@ -443,10 +619,11 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
           <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in">
             <div className="w-full max-w-md rounded-2xl bg-white border border-slate-200 p-6 text-slate-800 shadow-2xl">
               <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-                <h4 className="font-bold text-[#1e2238] text-base">Edit Pengguna: {editingUser.name}</h4>
+                <h4 className="font-bold text-[#1e2238] text-base">Edit Anggota: {editingUser.name}</h4>
                 <button
+                  disabled={isSubmittingEdit}
                   onClick={() => setEditingUser(null)}
-                  className="p-1 text-slate-400 hover:text-slate-700 cursor-pointer"
+                  className="p-1 text-slate-400 hover:text-slate-700 cursor-pointer disabled:opacity-50"
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -454,42 +631,54 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
 
               <form onSubmit={handleEditUserSubmit} className="mt-4 space-y-3.5">
                 <div>
-                  <label className="block text-xs font-bold text-slate-600 uppercase mb-1">Nama</label>
+                  <label className="block text-xs font-bold text-slate-600 uppercase mb-1">
+                    Nama Anggota (Wajib)
+                  </label>
                   <input
                     type="text"
+                    disabled={isSubmittingEdit}
                     value={editingUser.name}
                     onChange={(e) => setEditingUser({ ...editingUser, name: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm font-semibold disabled:bg-slate-50"
                     required
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-600 uppercase mb-1">Email Google</label>
+                  <label className="block text-xs font-bold text-slate-600 uppercase mb-1">
+                    Email Google (Opsional)
+                  </label>
                   <input
                     type="email"
+                    disabled={isSubmittingEdit}
                     value={editingUser.email || ''}
                     onChange={(e) => setEditingUser({ ...editingUser, email: e.target.value })}
                     placeholder="email@gmail.com"
-                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm disabled:bg-slate-50"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-600 uppercase mb-1">Role / Peran</label>
+                  <label className="block text-xs font-bold text-slate-600 uppercase mb-1">
+                    Role / Peran
+                  </label>
                   <select
+                    disabled={isSubmittingEdit}
                     value={editingUser.role}
                     onChange={(e) => setEditingUser({ ...editingUser, role: e.target.value as UserRole })}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm disabled:bg-slate-50"
                   >
                     <option value="user">Petugas Lapangan (User)</option>
                     <option value="admin">Administrator (Admin)</option>
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-600 uppercase mb-1">Status Keanggotaan</label>
+                  <label className="block text-xs font-bold text-slate-600 uppercase mb-1">
+                    Status Keanggotaan
+                  </label>
                   <select
+                    disabled={isSubmittingEdit}
                     value={editingUser.status}
                     onChange={(e) => setEditingUser({ ...editingUser, status: e.target.value as 'active' | 'inactive' })}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm disabled:bg-slate-50"
                   >
                     <option value="active">Aktif</option>
                     <option value="inactive">Nonaktif</option>
@@ -499,16 +688,28 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
                 <div className="pt-3 flex justify-end gap-2 border-t border-slate-100">
                   <button
                     type="button"
+                    disabled={isSubmittingEdit}
                     onClick={() => setEditingUser(null)}
-                    className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-semibold"
+                    className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-semibold disabled:opacity-50"
                   >
                     Batal
                   </button>
                   <button
                     type="submit"
-                    className="px-5 py-2 rounded-xl bg-[#1e2238] hover:bg-[#2b304f] text-white text-xs font-bold"
+                    disabled={isSubmittingEdit || !editingUser.name.trim()}
+                    className="px-5 py-2 rounded-xl bg-[#1e2238] hover:bg-[#2b304f] text-white text-xs font-bold flex items-center gap-2 disabled:opacity-50"
                   >
-                    Simpan Perubahan
+                    {isSubmittingEdit ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-400" />
+                        <span>Menyimpan ke Database...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Save className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>Simpan Perubahan</span>
+                      </>
+                    )}
                   </button>
                 </div>
               </form>
@@ -531,30 +732,35 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
 
               <div className="mt-4 p-3 rounded-xl bg-slate-50 text-xs text-slate-500 space-y-1 border border-slate-200">
                 <p>• <strong>Nonaktifkan:</strong> Menjaga integritas riwayat pekerjaan & upload foto.</p>
-                <p>• <strong>Hapus Permanen:</strong> Menghapus akun dari sistem seluruhnya.</p>
+                <p>• <strong>Hapus Permanen:</strong> Menghapus akun dari database Firestore seluruhnya.</p>
               </div>
 
               <div className="mt-6 flex flex-col sm:flex-row items-center justify-end gap-2">
                 <button
                   type="button"
+                  disabled={isSubmittingDelete}
                   onClick={() => setDeletingUser(null)}
-                  className="w-full sm:w-auto px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-semibold"
+                  className="w-full sm:w-auto px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-semibold disabled:opacity-50"
                 >
                   Batal
                 </button>
                 <button
                   type="button"
+                  disabled={isSubmittingDelete}
                   onClick={() => handleConfirmDelete(false)}
-                  className="w-full sm:w-auto px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold"
+                  className="w-full sm:w-auto px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 disabled:opacity-50"
                 >
-                  Nonaktifkan Saja
+                  {isSubmittingDelete ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+                  <span>Nonaktifkan Saja</span>
                 </button>
                 <button
                   type="button"
+                  disabled={isSubmittingDelete}
                   onClick={() => handleConfirmDelete(true)}
-                  className="w-full sm:w-auto px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold"
+                  className="w-full sm:w-auto px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 disabled:opacity-50"
                 >
-                  Hapus Permanen
+                  {isSubmittingDelete ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+                  <span>Hapus Permanen</span>
                 </button>
               </div>
             </div>

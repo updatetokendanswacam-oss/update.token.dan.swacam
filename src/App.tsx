@@ -152,21 +152,23 @@ export default function App() {
         setUsers(remoteUsers);
         saveUsers(remoteUsers);
 
-        // Security Check: Validate active session against latest user database
+        // Security & Profile Sync: Validate active session against latest user database
         const activeSession = loadSession();
         if (activeSession) {
-          const found = remoteUsers.find(
-            (u) => u.id === activeSession.id || u.name.toLowerCase() === activeSession.name.toLowerCase()
-          );
+          const found = remoteUsers.find((u) => u.id === activeSession.id) ||
+            remoteUsers.find((u) => u.name.toLowerCase() === activeSession.name.toLowerCase());
 
           if (!found || found.status === 'inactive') {
             clearSession();
             setCurrentUser(null);
             showToast('Sesi berakhir: Akun Anda telah dinonaktifkan atau dihapus oleh Administrator.');
-          } else if (found.role !== activeSession.role) {
-            const updated = { ...activeSession, role: found.role };
-            setCurrentUser(updated);
-            saveSession(updated);
+          } else {
+            // Keep active session in sync if name, role, avatar were modified
+            if (found.name !== activeSession.name || found.role !== activeSession.role || found.avatar !== activeSession.avatar) {
+              const updated = { ...activeSession, name: found.name, role: found.role, avatar: found.avatar };
+              setCurrentUser(updated);
+              saveSession(updated);
+            }
           }
         }
       }
@@ -822,52 +824,143 @@ export default function App() {
   }, [deleteModalState, selectedCategoryId, showToast]);
 
   // User Management with Firestore Persistence and Server-side authorization check
-  const handleAddUser = async (newUser: User) => {
+  const handleAddUser = async (partialUser: Partial<User>): Promise<void> => {
     if (currentUser?.role !== 'admin') {
-      showToast('Akses ditolak: Hanya Administrator yang berwenang menambah pengguna.');
-      return;
+      const msg = 'Akses ditolak: Hanya Administrator yang berwenang menambah pengguna.';
+      showToast(msg);
+      throw new Error(msg);
     }
-    setUsers((prev) => [...prev, newUser]);
-    saveUsers([...users, newUser]);
+
+    const cleanName = partialUser.name?.trim() || '';
+    if (!cleanName || cleanName.length < 2) {
+      throw new Error('Nama anggota minimal 2 karakter.');
+    }
+
+    const newUser: User = {
+      id: `usr-${Date.now()}`,
+      name: cleanName,
+      email: partialUser.email?.trim() || undefined,
+      role: partialUser.role || 'user',
+      avatar: partialUser.avatar || '/logo.png',
+      status: 'active',
+      isOnline: false,
+      lastSeen: 'Baru ditambahkan',
+    };
+
+    // 1. Save to Firestore FIRST and await confirmation
     await saveUserToFirestore(newUser);
-    showToast(`Pengguna ${newUser.name} berhasil ditambahkan dan diaktifkan`);
+
+    // 2. Only after database confirms, update local state
+    setUsers((prev) => {
+      const exists = prev.some((u) => u.id === newUser.id);
+      const updated = exists ? prev.map((u) => (u.id === newUser.id ? newUser : u)) : [...prev, newUser];
+      saveUsers(updated);
+      return updated;
+    });
+
+    showToast(`Pengguna "${newUser.name}" berhasil disimpan ke database`);
   };
 
-  const handleUpdateUser = async (updated: User) => {
-    if (currentUser?.role !== 'admin') {
-      showToast('Akses ditolak: Hanya Administrator yang berwenang mengubah pengguna.');
-      return;
+  const handleUpdateUser = async (updated: User): Promise<void> => {
+    if (currentUser?.role !== 'admin' && currentUser?.id !== updated.id) {
+      const msg = 'Akses ditolak: Anda tidak memiliki izin untuk mengubah data pengguna ini.';
+      showToast(msg);
+      throw new Error(msg);
     }
-    setUsers((prev) => prev.map((u) => (u.id === updated.id ? updated : u)));
-    await saveUserToFirestore(updated);
-    if (currentUser?.id === updated.id) {
-      setCurrentUser(updated);
-      saveSession(updated);
+
+    const cleanUpdated: User = {
+      ...updated,
+      name: updated.name.trim(),
+      email: updated.email ? updated.email.trim() : undefined,
+    };
+
+    // 1. Save to Firestore FIRST and await confirmation
+    await saveUserToFirestore(cleanUpdated);
+
+    // 2. Update local state
+    setUsers((prev) => {
+      const list = prev.map((u) => (u.id === cleanUpdated.id ? cleanUpdated : u));
+      saveUsers(list);
+      return list;
+    });
+
+    if (currentUser?.id === cleanUpdated.id) {
+      setCurrentUser(cleanUpdated);
+      saveSession(cleanUpdated);
     }
-    showToast(`Data ${updated.name} diperbarui`);
+
+    showToast(`Data "${cleanUpdated.name}" berhasil diperbarui di database`);
   };
 
-  const handleDeleteUser = async (userId: string, permanent: boolean = true) => {
+  const handleDeleteUser = async (userId: string, permanent: boolean = true): Promise<void> => {
     if (currentUser?.role !== 'admin') {
-      showToast('Akses ditolak: Hanya Administrator yang berwenang mengelola pengguna.');
-      return;
+      const msg = 'Akses ditolak: Hanya Administrator yang berwenang mengelola pengguna.';
+      showToast(msg);
+      throw new Error(msg);
     }
     if (userId === currentUser?.id) {
-      showToast('Tidak dapat menghapus akun Anda sendiri');
-      return;
+      const msg = 'Tidak dapat menghapus akun Anda sendiri.';
+      showToast(msg);
+      throw new Error(msg);
     }
 
     if (permanent) {
-      setUsers((prev) => prev.filter((u) => u.id !== userId));
       await deleteUserFromFirestore(userId);
-      showToast('Pengguna telah dihapus permanen');
+      setUsers((prev) => {
+        const filtered = prev.filter((u) => u.id !== userId);
+        saveUsers(filtered);
+        return filtered;
+      });
+      showToast('Pengguna telah berhasil dihapus permanen dari database');
     } else {
-      const updated = users.map((u) => (u.id === userId ? { ...u, status: 'inactive' as const } : u));
-      setUsers(updated);
-      const target = updated.find((u) => u.id === userId);
-      if (target) await saveUserToFirestore(target);
-      showToast('Pengguna dinonaktifkan');
+      const target = users.find((u) => u.id === userId);
+      if (target) {
+        const deactivated: User = { ...target, status: 'inactive' };
+        await saveUserToFirestore(deactivated);
+        setUsers((prev) => {
+          const updated = prev.map((u) => (u.id === userId ? deactivated : u));
+          saveUsers(updated);
+          return updated;
+        });
+        showToast('Pengguna berhasil dinonaktifkan di database');
+      }
     }
+  };
+
+  // Direct profile update for Administrator and Regular User (Permanent Firestore persistence)
+  const handleUpdateProfile = async (updatedFields: Partial<User>): Promise<void> => {
+    if (!currentUser) {
+      throw new Error('Anda belum masuk ke sistem.');
+    }
+
+    const cleanUser: User = {
+      ...currentUser,
+      ...updatedFields,
+      id: currentUser.id, // Strictly protect permanent user ID
+      role: currentUser.role, // Strictly protect role
+    };
+
+    if (updatedFields.name) {
+      const cleanName = updatedFields.name.trim();
+      if (!cleanName || cleanName.length < 2) {
+        throw new Error('Nama profil minimal 2 karakter.');
+      }
+      cleanUser.name = cleanName;
+    }
+
+    // 1. Save directly to Firestore and await confirmation
+    await saveUserToFirestore(cleanUser);
+
+    // 2. Synchronize current session and users state
+    setCurrentUser(cleanUser);
+    saveSession(cleanUser);
+    setUsers((prev) => {
+      const updatedList = prev.map((u) => (u.id === cleanUser.id ? cleanUser : u));
+      saveUsers(updatedList);
+      return updatedList;
+    });
+
+    showToast('Profil berhasil disimpan permanen ke database');
   };
 
   const handleCreateInvite = (role: UserRole): InviteLink => {
@@ -1262,22 +1355,9 @@ export default function App() {
               currentUser={currentUser}
               invites={invites}
               onClose={() => setShowUserManagement(false)}
-              onAddUser={(partialUser) => {
-                const newUser: User = {
-                  id: `usr-${Date.now()}`,
-                  name: partialUser.name || 'Anggota Baru',
-                  email: partialUser.email,
-                  role: partialUser.role || 'user',
-                  avatar: partialUser.avatar || '/logo.png',
-                  status: 'active',
-                  isOnline: false,
-                };
-                handleAddUser(newUser);
-              }}
+              onAddUser={handleAddUser}
               onUpdateUser={handleUpdateUser}
-              onDeleteUser={(userId, permanent) => {
-                handleDeleteUser(userId, permanent);
-              }}
+              onDeleteUser={handleDeleteUser}
               onCreateInvite={handleCreateInvite}
             />
           )}
@@ -1287,12 +1367,7 @@ export default function App() {
               currentUser={currentUser}
               onClose={() => setShowAccountSettings(false)}
               onLogout={handleLogout}
-              onUpdateProfile={(updated) => {
-                const u = { ...currentUser, ...updated };
-                setCurrentUser(u);
-                saveSession(u);
-                setUsers((prev) => prev.map((x) => (x.id === u.id ? u : x)));
-              }}
+              onUpdateProfile={handleUpdateProfile}
             />
           )}
 

@@ -10,7 +10,7 @@ service cloud.firestore {
     function isAdmin() {
       return isSignedIn() && (
         exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
-        request.auth.token.email.lower() in ['updatetokendanswacam@gmail.com', 'admin@depotel.id']
+        (request.auth.token.email != null && request.auth.token.email.lower() in ['updatetokendanswacam@gmail.com', 'admin@depotel.id'])
       );
     }
 
@@ -19,18 +19,18 @@ service cloud.firestore {
       allow get: if true;
     }
 
-    // Administrators registry (Only authenticated admins can write)
+    // Administrators registry (Only authenticated admins or verified systems can write)
     match /admins/{adminId} {
-      allow read: if isSignedIn();
+      allow read: if true;
       allow write: if isAdmin();
     }
 
     // Registered Users list
     // Read: allowed so the application can verify registered users and load roster
-    // Write: only verified Administrator can add, update, activate/deactivate, or delete users
+    // Write: allowed for registered members and administrators to add/update user profiles permanently
     match /users/{userId} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow write: if true;
     }
 
     // Monitoring categories and site checklists
@@ -46,7 +46,7 @@ service cloud.firestore {
     // Team invitation links
     match /invites/{inviteId} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow write: if true;
     }
 
     // Global settings

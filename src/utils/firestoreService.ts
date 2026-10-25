@@ -78,13 +78,24 @@ export async function syncUserProfile(fbUser: FirebaseUser): Promise<User> {
     console.warn('Error fetching existing user profile:', err);
   }
 
+  // Prioritize existing saved custom name and avatar from Firestore
+  const resolvedName =
+    existingProfile.name?.trim() ||
+    fbUser.displayName?.trim() ||
+    (isAdmin ? 'DEPOTEL Administrator' : (email ? email.split('@')[0] : 'Petugas Lapangan'));
+
+  const resolvedAvatar =
+    existingProfile.avatar?.trim() ||
+    fbUser.photoURL ||
+    '/logo.png';
+
   const userProfile: User = {
     id: uid,
-    name: fbUser.displayName || existingProfile.name || (isAdmin ? 'DEPOTEL Administrator' : email.split('@')[0] || 'Petugas Lapangan'),
-    email,
+    name: resolvedName,
+    email: email || existingProfile.email || '',
     role,
-    avatar: fbUser.photoURL || existingProfile.avatar || '/logo.png',
-    status: 'active',
+    avatar: resolvedAvatar,
+    status: existingProfile.status || 'active',
     isOnline: true,
     lastSeen: 'Sekarang',
   };
@@ -165,31 +176,90 @@ export async function seedInitialUsers(): Promise<void> {
 }
 
 /**
- * Save or update a user document in Firestore
+ * Save or update a user document in Firestore permanently.
+ * Guarantees that Firestore writes are executed and throws descriptive error if failed.
  */
 export async function saveUserToFirestore(user: User): Promise<void> {
-  const userRef = doc(db, 'users', user.id);
-  await setDoc(userRef, user, { merge: true });
+  if (!user.id) {
+    throw new Error('ID pengguna wajib disertakan.');
+  }
+  if (!user.name || user.name.trim().length < 2) {
+    throw new Error('Nama pengguna minimal 2 karakter.');
+  }
 
-  const adminRef = doc(db, 'admins', user.id);
-  if (user.role === 'admin') {
-    await setDoc(adminRef, {
-      userId: user.id,
-      name: user.name,
-      email: user.email || '',
-      addedAt: new Date().toISOString(),
-    }, { merge: true });
-  } else {
+  const cleanUser: User = {
+    ...user,
+    name: user.name.trim(),
+    email: user.email ? user.email.trim() : undefined,
+  };
+
+  const userRef = doc(db, 'users', cleanUser.id);
+  await setDoc(userRef, {
+    ...cleanUser,
+    updatedAt: new Date().toISOString(),
+  }, { merge: true });
+
+  // Synchronize admin document if admin role
+  if (cleanUser.role === 'admin') {
     try {
-      await deleteDoc(adminRef);
-    } catch {
-      // Ignored if wasn't admin
+      const adminRef = doc(db, 'admins', cleanUser.id);
+      await setDoc(adminRef, {
+        userId: cleanUser.id,
+        name: cleanUser.name,
+        email: cleanUser.email || '',
+        updatedAt: new Date().toISOString(),
+      }, { merge: true });
+    } catch (e) {
+      console.warn('Could not update admin collection record:', e);
     }
   }
 }
 
 /**
- * Delete a user from Firestore
+ * Updates a user's name permanently in Firestore.
+ * Verifies that the document exists and updates only the name and updatedAt.
+ */
+export async function updateUserProfileName(userId: string, newName: string): Promise<User> {
+  const cleanName = newName.trim();
+  if (!cleanName || cleanName.length < 2) {
+    throw new Error('Nama profil minimal 2 karakter dan tidak boleh kosong.');
+  }
+
+  const userRef = doc(db, 'users', userId);
+  const snap = await getDoc(userRef);
+  if (!snap.exists()) {
+    throw new Error('Data profil pengguna tidak ditemukan di database.');
+  }
+
+  const existingData = snap.data() as User;
+  const updatedUser: User = {
+    ...existingData,
+    name: cleanName,
+  };
+
+  await setDoc(userRef, {
+    name: cleanName,
+    updatedAt: new Date().toISOString(),
+  }, { merge: true });
+
+  if (existingData.role === 'admin') {
+    try {
+      const adminRef = doc(db, 'admins', userId);
+      await setDoc(adminRef, {
+        userId,
+        name: cleanName,
+        updatedAt: new Date().toISOString(),
+      }, { merge: true });
+    } catch (e) {
+      console.warn('Sync admin record notice:', e);
+    }
+  }
+
+  return updatedUser;
+}
+
+/**
+ * Delete a user from Firestore permanently
  */
 export async function deleteUserFromFirestore(userId: string): Promise<void> {
   const userRef = doc(db, 'users', userId);
