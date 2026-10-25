@@ -236,6 +236,18 @@ export default function App() {
               const localSite = localCat.sites.find((s) => s.id === remoteSite.id);
               if (!localSite) return remoteSite;
 
+              const remoteTime = remoteSite.updatedAt ? new Date(remoteSite.updatedAt).getTime() : 0;
+              const localTime = localSite.updatedAt ? new Date(localSite.updatedAt).getTime() : 0;
+
+              // Preserve local status if local edit timestamp is newer
+              const useLocalStatus = localTime > remoteTime;
+              const finalChecked = useLocalStatus ? localSite.checked : remoteSite.checked;
+              const finalCheckedBy = useLocalStatus
+                ? localSite.checkedBy
+                : (remoteSite.checked ? remoteSite.checkedBy : '');
+              const finalUpdatedAt = useLocalStatus ? localSite.updatedAt : remoteSite.updatedAt;
+              const finalUpdatedBy = useLocalStatus ? localSite.updatedBy : remoteSite.updatedBy;
+
               const localPhotos = localSite.photos || [];
               const remotePhotos = remoteSite.photos || [];
 
@@ -262,6 +274,10 @@ export default function App() {
 
               return {
                 ...remoteSite,
+                checked: finalChecked,
+                checkedBy: finalCheckedBy,
+                updatedAt: finalUpdatedAt,
+                updatedBy: finalUpdatedBy,
                 photos: Array.from(photoMap.values()),
               };
             });
@@ -660,11 +676,13 @@ export default function App() {
 
       const newCheckedStatus = !refSite.checked;
       const userName = currentUser?.name || 'Petugas';
+      const nowIso = new Date().toISOString();
+
       const updated = updateSiteGlobally(prevCategories, targetSiteId, (site) => ({
         ...site,
         checked: newCheckedStatus,
-        checkedBy: newCheckedStatus ? userName : undefined,
-        updatedAt: new Date().toISOString(),
+        checkedBy: newCheckedStatus ? userName : '',
+        updatedAt: nowIso,
         updatedBy: userName,
       }));
 
@@ -672,8 +690,26 @@ export default function App() {
 
       // Non-blocking async background sync to Firestore
       setTimeout(() => {
+        const refMeter = refSite.meterId;
+        const refCode = refSite.siteId;
+
         const affectedCategories = updated.filter((c) =>
-          c.sites.some((s) => s.id === targetSiteId || (refSite.siteId && s.siteId === refSite.siteId))
+          c.sites.some((s) => {
+            const isExact = s.id === targetSiteId;
+            const isSameCode =
+              refCode &&
+              refCode.trim() !== '' &&
+              s.siteId &&
+              s.siteId.trim() !== '' &&
+              s.siteId.toLowerCase() === refCode.toLowerCase();
+            const isSameMeter =
+              refMeter &&
+              refMeter.trim() !== '' &&
+              refMeter !== '-' &&
+              s.meterId &&
+              s.meterId === refMeter;
+            return isExact || isSameCode || isSameMeter;
+          })
         );
 
         for (const cat of affectedCategories) {

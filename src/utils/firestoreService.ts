@@ -344,6 +344,7 @@ export async function saveCategoryToFirestore(category: UpdateCategory): Promise
   // while the full high-resolution image data is stored securely in /photos/{photoId} collection.
   const sanitizedSites = category.sites.map((s) => ({
     ...s,
+    checkedBy: s.checked ? (s.checkedBy || s.updatedBy || '') : '',
     photos: (s.photos || []).map((p) => ({
       id: p.id,
       siteId: p.siteId,
