@@ -45,8 +45,8 @@ export const PhotoGalleryModal: React.FC<PhotoGalleryModalProps> = ({
   };
 
   const handleConfirmDelete = async () => {
-    if (!isAdmin) {
-      setDeleteNotice('Akses ditolak: Hanya Administrator yang berwenang menghapus foto dokumentasi.');
+    if (!currentUser) {
+      setDeleteNotice('Akses ditolak: Silakan masuk terlebih dahulu untuk menghapus foto.');
       return;
     }
 
@@ -97,26 +97,17 @@ export const PhotoGalleryModal: React.FC<PhotoGalleryModalProps> = ({
               <span className="hidden sm:inline">Unduh Gambar</span>
             </button>
 
-            {isAdmin ? (
-              <button
-                onClick={() => {
-                  setDeleteNotice(null);
-                  setShowDeleteConfirm(true);
-                }}
-                title="Hapus foto ini (Khusus Administrator)"
-                className="p-2 rounded-xl bg-red-950/60 hover:bg-red-900/80 text-red-400 hover:text-red-200 border border-red-800/40 transition cursor-pointer"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
-            ) : (
-              <div
-                title="Hanya Administrator yang berwenang menghapus foto dokumentasi"
-                className="hidden sm:flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-800 text-[10px] text-slate-400 border border-slate-700"
-              >
-                <Shield className="w-3 h-3 text-amber-400" />
-                <span>Admin Lock</span>
-              </div>
-            )}
+            <button
+              onClick={() => {
+                setDeleteNotice(null);
+                setShowDeleteConfirm(true);
+              }}
+              title="Hapus foto ini secara permanen"
+              className="p-2 rounded-xl bg-red-950/60 hover:bg-red-900/80 text-red-400 hover:text-red-200 border border-red-800/40 transition cursor-pointer flex items-center gap-1"
+            >
+              <Trash2 className="w-4 h-4" />
+              <span className="text-xs font-semibold hidden sm:inline">Hapus</span>
+            </button>
 
             <button
               onClick={onClose}
@@ -202,7 +193,7 @@ export const PhotoGalleryModal: React.FC<PhotoGalleryModalProps> = ({
                 </p>
               ) : (
                 <p className="text-xs text-slate-300 mt-2">
-                  Sebagai Administrator, Anda dapat menghapus foto ini secara permanen dari server cloud dan database.
+                  Anda dapat menghapus foto ini secara permanen dari server cloud dan database.
                 </p>
               )}
               <div className="flex items-center justify-center gap-2 mt-5">

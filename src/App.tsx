@@ -766,8 +766,8 @@ export default function App() {
   }, [currentUser?.name, showToast]);
 
   const handleDeletePhoto = useCallback(async (siteId: string, photoId: string): Promise<void> => {
-    if (currentUser?.role !== 'admin') {
-      const msg = 'Akses ditolak: Hanya Administrator yang berwenang menghapus foto dokumentasi.';
+    if (!currentUser) {
+      const msg = 'Akses ditolak: Silakan masuk terlebih dahulu untuk menghapus foto.';
       showToast(msg);
       throw new Error(msg);
     }
