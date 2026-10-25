@@ -15,7 +15,7 @@ interface SiteCardProps {
   onViewPhoto: (site: SiteItem, photoIndex: number) => void;
 }
 
-export const SiteCard: React.FC<SiteCardProps> = ({
+export const SiteCard: React.FC<SiteCardProps> = React.memo(({
   site,
   category,
   currentUser,
@@ -266,4 +266,4 @@ export const SiteCard: React.FC<SiteCardProps> = ({
       </div>
     </div>
   );
-};
+});
