@@ -267,7 +267,7 @@ export const INITIAL_CATEGORIES: UpdateCategory[] = [
     title: 'Pengisian Token Listrik SWFM – DEPOTEL',
     period: 'Bulan Oktober 2026',
     type: 'token',
-    allowCamera: false,
+    allowCamera: true,
     allowTokenInput: true,
     sites: [
       { id: 't1', meterId: '547402150841', siteId: 'EPE134', siteName: 'EPE134_GGLANGGARKEBAGUSANEMRSSIAGARAYAEASYMACRO', checked: false, tokens: [] },

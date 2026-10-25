@@ -166,7 +166,13 @@ export function loadCategories(): UpdateCategory[] {
       saveCategories(INITIAL_CATEGORIES);
       return INITIAL_CATEGORIES;
     }
-    return parsed;
+    const updated = parsed.map((cat: UpdateCategory) => {
+      if (cat.id === 'cat-token-depotel' || cat.title.toLowerCase().includes('swfm')) {
+        return { ...cat, allowCamera: true };
+      }
+      return cat;
+    });
+    return updated;
   } catch (e) {
     console.error('Error loading categories:', e);
     return INITIAL_CATEGORIES;

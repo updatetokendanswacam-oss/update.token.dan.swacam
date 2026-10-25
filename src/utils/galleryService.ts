@@ -12,11 +12,13 @@ export async function savePhotoToPhoneGallery(
     return { success: false, message: 'Lingkungan browser tidak tersedia.' };
   }
 
-  const isToken =
-    categoryType.toLowerCase().includes('token') ||
-    categoryType.toLowerCase().includes('manual');
-
-  const brandTag = isToken ? 'TOKEN_MANUAL' : 'SWACAM';
+  let brandTag = 'SWACAM';
+  const lowerCat = categoryType.toLowerCase();
+  if (lowerCat.includes('swfm')) {
+    brandTag = 'TOKEN_SWFM';
+  } else if (lowerCat.includes('token') || lowerCat.includes('manual')) {
+    brandTag = 'TOKEN_MANUAL';
+  }
   const cleanSiteId = (siteId || 'SITE').replace(/[^a-zA-Z0-9_-]/g, '');
   const timestampStr = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
   const filename = `DEPOTEL_${brandTag}_${cleanSiteId}_${timestampStr}.jpg`;

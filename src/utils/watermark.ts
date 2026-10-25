@@ -7,6 +7,11 @@ export function getPhotoWatermarkBrand(categoryTitleOrType?: string): string {
   if (!categoryTitleOrType) return 'DEPOTEL GROUP - SWACAM';
   const lower = categoryTitleOrType.toLowerCase();
 
+  // Specifically check for Token SWFM list
+  if (lower.includes('swfm')) {
+    return 'DEPOTEL GROUP - TOKEN SWFM';
+  }
+
   // Specifically check for Token Manual list
   if (
     lower.includes('token manual') ||

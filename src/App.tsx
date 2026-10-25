@@ -217,8 +217,18 @@ export default function App() {
   useEffect(() => {
     const unsubscribeCats = subscribeToCategories((remoteCats) => {
       if (remoteCats && remoteCats.length > 0) {
+        // Automatically ensure allowCamera is true for SWFM Token list
+        const fixedCats = remoteCats.map((cat) => {
+          if ((cat.id === 'cat-token-depotel' || cat.title.toLowerCase().includes('swfm')) && !cat.allowCamera) {
+            const updatedCat = { ...cat, allowCamera: true };
+            saveCategoryToFirestore(updatedCat).catch(() => {});
+            return updatedCat;
+          }
+          return cat;
+        });
+
         setCategories((prevCategories) => {
-          const merged = remoteCats.map((remoteCat) => {
+          const merged = fixedCats.map((remoteCat) => {
             const localCat = prevCategories.find((c) => c.id === remoteCat.id);
             if (!localCat) return remoteCat;
 
