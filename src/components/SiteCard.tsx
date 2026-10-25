@@ -234,9 +234,14 @@ export const SiteCard: React.FC<SiteCardProps> = ({
                     className="relative group rounded-xl overflow-hidden border border-slate-700 bg-slate-950 cursor-pointer aspect-video"
                   >
                     <img
-                      src={photo.dataUrl}
+                      src={photo.storageUrl || photo.dataUrl}
                       alt={`Foto Site ${site.siteId}`}
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      onError={(e) => {
+                        if (photo.dataUrl && e.currentTarget.src !== photo.dataUrl) {
+                          e.currentTarget.src = photo.dataUrl;
+                        }
+                      }}
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex flex-col justify-end p-1.5">
                       <p className="text-[9px] font-bold text-yellow-300 truncate">

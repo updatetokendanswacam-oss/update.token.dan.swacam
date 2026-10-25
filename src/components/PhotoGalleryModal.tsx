@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Download, Trash2, Shield, Calendar, Clock, User as UserIcon, AlertTriangle } from 'lucide-react';
+import { X, Download, Trash2, Shield, Clock, User as UserIcon, AlertTriangle, Loader2, CheckCircle2 } from 'lucide-react';
 import { SiteItem, User, PhotoRecord } from '../types';
 
 interface PhotoGalleryModalProps {
@@ -7,7 +7,7 @@ interface PhotoGalleryModalProps {
   initialIndex: number;
   currentUser: User | null;
   onClose: () => void;
-  onDeletePhoto: (siteId: string, photoId: string) => void;
+  onDeletePhoto: (siteId: string, photoId: string) => Promise<void>;
 }
 
 export const PhotoGalleryModal: React.FC<PhotoGalleryModalProps> = ({
@@ -22,6 +22,8 @@ export const PhotoGalleryModal: React.FC<PhotoGalleryModalProps> = ({
     Math.min(initialIndex, Math.max(0, photos.length - 1))
   );
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteNotice, setDeleteNotice] = useState<string | null>(null);
 
   const activePhoto = photos[currentIndex];
   const isAdmin = currentUser?.role === 'admin';
@@ -30,28 +32,39 @@ export const PhotoGalleryModal: React.FC<PhotoGalleryModalProps> = ({
     return null;
   }
 
+  const imageUrl = activePhoto.storageUrl || activePhoto.dataUrl;
+
   const handleDownload = () => {
+    if (!imageUrl) return;
     const link = document.createElement('a');
-    link.href = activePhoto.dataUrl;
+    link.href = imageUrl;
     link.download = `DEPOTEL_${site.siteId}_${site.meterId}_${Date.now()}.jpg`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
 
-  const [deleteNotice, setDeleteNotice] = useState<string | null>(null);
-
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async () => {
     if (!isAdmin) {
-      setDeleteNotice('Hanya Administrator yang berwenang menghapus foto dokumentasi.');
+      setDeleteNotice('Akses ditolak: Hanya Administrator yang berwenang menghapus foto dokumentasi.');
       return;
     }
-    onDeletePhoto(site.id, activePhoto.id);
-    setShowDeleteConfirm(false);
-    if (photos.length <= 1) {
-      onClose();
-    } else {
-      setCurrentIndex(Math.max(0, currentIndex - 1));
+
+    setIsDeleting(true);
+    setDeleteNotice(null);
+
+    try {
+      await onDeletePhoto(site.id, activePhoto.id);
+      setShowDeleteConfirm(false);
+      if (photos.length <= 1) {
+        onClose();
+      } else {
+        setCurrentIndex(Math.max(0, currentIndex - 1));
+      }
+    } catch (err: any) {
+      setDeleteNotice(err?.message || 'Gagal menghapus foto dari database. Silakan coba lagi.');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -86,15 +99,18 @@ export const PhotoGalleryModal: React.FC<PhotoGalleryModalProps> = ({
 
             {isAdmin ? (
               <button
-                onClick={() => setShowDeleteConfirm(true)}
-                title="Hapus foto ini (Hanya Admin Diki Solihin)"
+                onClick={() => {
+                  setDeleteNotice(null);
+                  setShowDeleteConfirm(true);
+                }}
+                title="Hapus foto ini (Khusus Administrator)"
                 className="p-2 rounded-xl bg-red-950/60 hover:bg-red-900/80 text-red-400 hover:text-red-200 border border-red-800/40 transition cursor-pointer"
               >
                 <Trash2 className="w-4 h-4" />
               </button>
             ) : (
               <div
-                title="Hanya Admin Diki Solihin yang berwenang menghapus foto"
+                title="Hanya Administrator yang berwenang menghapus foto dokumentasi"
                 className="hidden sm:flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-800 text-[10px] text-slate-400 border border-slate-700"
               >
                 <Shield className="w-3 h-3 text-amber-400" />
@@ -113,24 +129,36 @@ export const PhotoGalleryModal: React.FC<PhotoGalleryModalProps> = ({
 
         {/* Main Image Viewer */}
         <div className="flex-1 bg-black flex items-center justify-center p-3 relative overflow-hidden min-h-[300px]">
-          <img
-            src={activePhoto.dataUrl}
-            alt="Dokumentasi Catat Meter DEPOTEL"
-            className="max-h-[60vh] max-w-full object-contain rounded-lg shadow-2xl"
-          />
+          {imageUrl ? (
+            <img
+              src={imageUrl}
+              alt={`Dokumentasi Catat Meter ${site.siteId}`}
+              className="max-h-[60vh] max-w-full object-contain rounded-lg shadow-2xl"
+              onError={(e) => {
+                // If storageUrl fails or has CORS, fallback to dataUrl if available
+                if (activePhoto.dataUrl && (e.currentTarget.src !== activePhoto.dataUrl)) {
+                  e.currentTarget.src = activePhoto.dataUrl;
+                }
+              }}
+            />
+          ) : (
+            <div className="text-center p-8 text-slate-400">
+              <p className="text-sm font-semibold">Foto sedang dimuat dari server...</p>
+            </div>
+          )}
 
           {/* Navigation Arrows if multiple photos */}
           {photos.length > 1 && (
             <>
               <button
                 onClick={() => setCurrentIndex((prev) => (prev > 0 ? prev - 1 : photos.length - 1))}
-                className="absolute left-4 top-1/2 -translate-y-1/2 p-3 rounded-full bg-slate-900/80 hover:bg-slate-800 text-white border border-slate-700 cursor-pointer"
+                className="absolute left-4 top-1/2 -translate-y-1/2 p-3 rounded-full bg-slate-900/80 hover:bg-slate-800 text-white border border-slate-700 cursor-pointer shadow-lg"
               >
                 ❮
               </button>
               <button
                 onClick={() => setCurrentIndex((prev) => (prev < photos.length - 1 ? prev + 1 : 0))}
-                className="absolute right-4 top-1/2 -translate-y-1/2 p-3 rounded-full bg-slate-900/80 hover:bg-slate-800 text-white border border-slate-700 cursor-pointer"
+                className="absolute right-4 top-1/2 -translate-y-1/2 p-3 rounded-full bg-slate-900/80 hover:bg-slate-800 text-white border border-slate-700 cursor-pointer shadow-lg"
               >
                 ❯
               </button>
@@ -149,9 +177,14 @@ export const PhotoGalleryModal: React.FC<PhotoGalleryModalProps> = ({
               <UserIcon className="w-4 h-4 text-blue-400" />
               <span>Petugas: <strong>{activePhoto.capturedBy}</strong></span>
             </div>
+            {activePhoto.brandTitle && (
+              <div className="text-[11px] px-2 py-0.5 rounded bg-blue-950 text-blue-300 border border-blue-800">
+                {activePhoto.brandTitle}
+              </div>
+            )}
           </div>
           <p className="text-[11px] text-slate-500">
-            Foto permanen tanpa batas masa berlaku (Permanent Storage)
+            Penyimpanan Permanen Cloud (Tanpa Batas Waktu)
           </p>
         </div>
 
@@ -169,21 +202,24 @@ export const PhotoGalleryModal: React.FC<PhotoGalleryModalProps> = ({
                 </p>
               ) : (
                 <p className="text-xs text-slate-300 mt-2">
-                  Sebagai Admin, Anda dapat menghapus foto ini secara permanen dari server lokal.
+                  Sebagai Administrator, Anda dapat menghapus foto ini secara permanen dari server cloud dan database.
                 </p>
               )}
               <div className="flex items-center justify-center gap-2 mt-5">
                 <button
+                  disabled={isDeleting}
                   onClick={() => setShowDeleteConfirm(false)}
-                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold cursor-pointer"
+                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold cursor-pointer disabled:opacity-50"
                 >
                   Batal
                 </button>
                 <button
+                  disabled={isDeleting}
                   onClick={handleConfirmDelete}
-                  className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-bold shadow-lg shadow-red-950 cursor-pointer"
+                  className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-bold shadow-lg shadow-red-950 cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
                 >
-                  Ya, Hapus Permanen
+                  {isDeleting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+                  <span>{isDeleting ? 'Menghapus...' : 'Ya, Hapus Permanen'}</span>
                 </button>
               </div>
             </div>

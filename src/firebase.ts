@@ -1,6 +1,7 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
+import { getStorage } from 'firebase/storage';
 import bundledConfig from '../firebase-applet-config.json';
 
 // Resolves config consistently for AI Studio, GitHub clone, and Vercel production
@@ -33,6 +34,9 @@ googleProvider.setCustomParameters({
 export const db = firebaseConfig.firestoreDatabaseId
   ? getFirestore(app, firebaseConfig.firestoreDatabaseId)
   : getFirestore(app);
+
+// Initialize Firebase Cloud Storage
+export const storage = getStorage(app);
 
 // Connectivity validation
 async function testConnection() {

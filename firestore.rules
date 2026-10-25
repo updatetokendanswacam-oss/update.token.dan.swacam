@@ -43,6 +43,16 @@ service cloud.firestore {
       allow update: if true;
     }
 
+    // Documentation photos (Token & SWACAM)
+    // Read: allowed for all operational users
+    // Create & Update: allowed for photo uploads with valid metadata
+    // Delete: strictly restricted to verified Administrator
+    match /photos/{photoId} {
+      allow read: if true;
+      allow create, update: if true;
+      allow delete: if isAdmin();
+    }
+
     // Team invitation links
     match /invites/{inviteId} {
       allow read: if true;

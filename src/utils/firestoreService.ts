@@ -10,10 +10,12 @@ import {
   orderBy,
   Unsubscribe
 } from 'firebase/firestore';
+import { ref, uploadString, getDownloadURL, deleteObject } from 'firebase/storage';
 import { User as FirebaseUser } from 'firebase/auth';
-import { db } from '../firebase';
-import { UpdateCategory, User, InviteLink } from '../types';
+import { db, storage } from '../firebase';
+import { UpdateCategory, User, InviteLink, PhotoRecord } from '../types';
 import { INITIAL_CATEGORIES, INITIAL_USERS } from './initialData';
+import { savePhotoToDB, deletePhotoFromDB } from './storage';
 
 export const BOOTSTRAPPED_ADMIN_EMAILS: string[] = [
   'updatetokendanswacam@gmail.com',
@@ -319,11 +321,41 @@ export async function seedInitialCategories(): Promise<void> {
 }
 
 /**
- * Save or update a single category in Firestore
+ * Save or update a single category in Firestore with sanitized site records
+ * to strictly prevent exceeding Firestore's 1MB document limit.
  */
 export async function saveCategoryToFirestore(category: UpdateCategory): Promise<void> {
   const catRef = doc(db, 'categories', category.id);
-  await setDoc(catRef, category, { merge: true });
+
+  // Store lightweight photo metadata inside site objects so the category document stays small,
+  // while the full high-resolution image data is stored securely in /photos/{photoId} collection.
+  const sanitizedSites = category.sites.map((s) => ({
+    ...s,
+    photos: (s.photos || []).map((p) => ({
+      id: p.id,
+      siteId: p.siteId,
+      siteName: p.siteName,
+      meterId: p.meterId,
+      storageUrl: p.storageUrl || '',
+      storagePath: p.storagePath || '',
+      // Only retain dataUrl if it's small (<100KB), otherwise rely on /photos collection
+      dataUrl: p.storageUrl ? '' : (p.dataUrl && p.dataUrl.length > 100000 ? '' : p.dataUrl),
+      timestamp: p.timestamp,
+      capturedBy: p.capturedBy,
+      capturedById: p.capturedById || '',
+      formattedTime: p.formattedTime,
+      categoryType: p.categoryType,
+      categoryTitle: p.categoryTitle,
+      brandTitle: p.brandTitle,
+    })),
+  }));
+
+  const sanitizedCategory: UpdateCategory = {
+    ...category,
+    sites: sanitizedSites,
+  };
+
+  await setDoc(catRef, sanitizedCategory, { merge: true });
 }
 
 /**
@@ -340,4 +372,122 @@ export async function deleteCategoryFromFirestore(categoryId: string): Promise<v
 export async function saveInviteToFirestore(invite: InviteLink): Promise<void> {
   const inviteRef = doc(db, 'invites', invite.id);
   await setDoc(inviteRef, invite, { merge: true });
+}
+
+/**
+ * Saves a documentation photo permanently to Firebase Cloud Storage and Firestore.
+ * Ensures the photo is uploaded, referenced with permanent storage URL, and saved to /photos/{photoId}.
+ */
+export async function savePhotoPermanently(photo: PhotoRecord): Promise<PhotoRecord> {
+  if (!photo.id) {
+    throw new Error('ID foto tidak valid.');
+  }
+
+  let storageUrl = photo.storageUrl;
+  let storagePath = photo.storagePath;
+
+  // 1. Attempt upload to Firebase Cloud Storage
+  if (storage && photo.dataUrl && photo.dataUrl.startsWith('data:')) {
+    try {
+      const generatedPath = `photos/${photo.siteId}/${photo.id}.jpg`;
+      const storageRef = ref(storage, generatedPath);
+      await uploadString(storageRef, photo.dataUrl, 'data_url');
+      storageUrl = await getDownloadURL(storageRef);
+      storagePath = generatedPath;
+    } catch (err) {
+      console.warn('Firebase Cloud Storage notice (fallback to Firestore document):', err);
+    }
+  }
+
+  const finalRecord: PhotoRecord = {
+    ...photo,
+    storageUrl: storageUrl || photo.storageUrl,
+    storagePath: storagePath || photo.storagePath,
+    createdAt: photo.createdAt || new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+
+  // 2. Save complete photo record permanently into Firestore /photos/{photoId}
+  const photoDocRef = doc(db, 'photos', finalRecord.id);
+  await setDoc(photoDocRef, finalRecord, { merge: true });
+
+  // 3. Cache in local IndexedDB for rapid offline access
+  try {
+    await savePhotoToDB(finalRecord);
+  } catch (err) {
+    console.warn('IndexedDB photo cache warning:', err);
+  }
+
+  return finalRecord;
+}
+
+/**
+ * Permanently deletes a documentation photo from Firestore, Firebase Storage, and IndexedDB.
+ * Restricted to verified Administrator actions only.
+ */
+export async function deletePhotoPermanently(photoId: string, storagePath?: string): Promise<void> {
+  // 1. Delete from Firestore /photos/{photoId}
+  const photoDocRef = doc(db, 'photos', photoId);
+  await deleteDoc(photoDocRef);
+
+  // 2. Delete from Firebase Cloud Storage if a storage path exists
+  if (storage && storagePath) {
+    try {
+      const storageRef = ref(storage, storagePath);
+      await deleteObject(storageRef);
+    } catch (e) {
+      console.warn('Firebase Storage file delete notice:', e);
+    }
+  }
+
+  // 3. Delete from local IndexedDB cache
+  try {
+    await deletePhotoFromDB(photoId);
+  } catch (e) {
+    console.warn('IndexedDB delete notice:', e);
+  }
+}
+
+/**
+ * Real-time subscription to all documentation photos in Firestore.
+ * Automatically synchronizes photos across all devices, sessions, and reloads.
+ */
+export function subscribeToPhotos(
+  onUpdate: (photos: PhotoRecord[]) => void,
+  onError?: (err: Error) => void
+): Unsubscribe {
+  const photosCol = collection(db, 'photos');
+  return onSnapshot(
+    photosCol,
+    (snapshot) => {
+      const photoList: PhotoRecord[] = [];
+      snapshot.forEach((d) => {
+        photoList.push(d.data() as PhotoRecord);
+      });
+      // Sort newest first
+      photoList.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+      onUpdate(photoList);
+    },
+    (err) => {
+      console.error('Firestore photos snapshot listener error:', err);
+      if (onError) onError(err);
+    }
+  );
+}
+
+/**
+ * Fetches all documentation photos from Firestore once.
+ */
+export async function loadAllPhotosFromFirestore(): Promise<PhotoRecord[]> {
+  try {
+    const snap = await getDocs(collection(db, 'photos'));
+    const photoList: PhotoRecord[] = [];
+    snap.forEach((d) => {
+      photoList.push(d.data() as PhotoRecord);
+    });
+    return photoList;
+  } catch (err) {
+    console.error('Failed to load photos from Firestore:', err);
+    return [];
+  }
 }

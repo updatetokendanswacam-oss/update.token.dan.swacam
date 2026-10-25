@@ -210,10 +210,15 @@ const SiteItemCard: React.FC<SiteItemCardProps> = React.memo(({
                         className="relative group shrink-0 w-20 h-14 rounded-lg overflow-hidden border border-slate-200 cursor-pointer bg-slate-100"
                       >
                         <img
-                          src={photo.dataUrl}
+                          src={photo.storageUrl || photo.dataUrl}
                           alt="Foto Meter"
                           loading="lazy"
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                          onError={(e) => {
+                            if (photo.dataUrl && e.currentTarget.src !== photo.dataUrl) {
+                              e.currentTarget.src = photo.dataUrl;
+                            }
+                          }}
                         />
                         <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white">
                           <Eye className="w-3.5 h-3.5" />

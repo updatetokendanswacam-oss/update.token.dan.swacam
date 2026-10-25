@@ -5,7 +5,7 @@
       "description": "Authenticated user profile in DEPOTEL monitoring system",
       "type": "object",
       "properties": {
-        "id": { "type": "string", "description": "Firebase Auth UID" },
+        "id": { "type": "string", "description": "Firebase Auth UID or generated user ID" },
         "name": { "type": "string", "description": "Display name of the user" },
         "email": { "type": "string", "description": "Email address" },
         "role": { "type": "string", "enum": ["admin", "user"], "description": "Role permission level" },
@@ -44,6 +44,27 @@
       },
       "required": ["id", "title", "period", "type", "sites"]
     },
+    "Photo": {
+      "title": "Photo",
+      "description": "Documentation photo record with permanent storage reference and watermark metadata",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique photo identifier" },
+        "siteId": { "type": "string", "description": "Site ID code" },
+        "siteName": { "type": "string", "description": "Name of site" },
+        "meterId": { "type": "string", "description": "Meter customer ID" },
+        "dataUrl": { "type": "string", "description": "Optimized watermarked image data" },
+        "storageUrl": { "type": "string", "description": "Cloud storage permanent download URL" },
+        "storagePath": { "type": "string", "description": "Cloud storage path reference" },
+        "timestamp": { "type": "string", "description": "Capture timestamp ISO" },
+        "capturedBy": { "type": "string", "description": "Operator name" },
+        "capturedById": { "type": "string", "description": "Operator user ID" },
+        "categoryType": { "type": "string", "description": "Source category type (token_manual or swacam)" },
+        "categoryTitle": { "type": "string", "description": "Category title" },
+        "formattedTime": { "type": "string", "description": "WIB formatted date and time string" }
+      },
+      "required": ["id", "siteId", "meterId", "timestamp", "capturedBy"]
+    },
     "Invite": {
       "title": "Invite",
       "description": "Invitation link for field officers",
@@ -70,6 +91,10 @@
     "/categories/{categoryId}": {
       "schema": "Category",
       "description": "Shared Token and SWACAM monitoring list records"
+    },
+    "/photos/{photoId}": {
+      "schema": "Photo",
+      "description": "Permanent documentation photos for Token and SWACAM meters"
     },
     "/invites/{inviteId}": {
       "schema": "Invite",

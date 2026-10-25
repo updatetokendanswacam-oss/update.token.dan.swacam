@@ -56,9 +56,26 @@ export async function addDepotelWatermark(
 
     img.onload = () => {
       try {
+        const originalWidth = img.naturalWidth || img.width || 1280;
+        const originalHeight = img.naturalHeight || img.height || 720;
+        const maxDimension = 1280;
+
+        let targetWidth = originalWidth;
+        let targetHeight = originalHeight;
+
+        if (originalWidth > maxDimension || originalHeight > maxDimension) {
+          if (originalWidth >= originalHeight) {
+            targetWidth = maxDimension;
+            targetHeight = Math.round((originalHeight / originalWidth) * maxDimension);
+          } else {
+            targetHeight = maxDimension;
+            targetWidth = Math.round((originalWidth / originalHeight) * maxDimension);
+          }
+        }
+
         const canvas = document.createElement('canvas');
-        canvas.width = img.naturalWidth || img.width;
-        canvas.height = img.naturalHeight || img.height;
+        canvas.width = targetWidth;
+        canvas.height = targetHeight;
 
         const ctx = canvas.getContext('2d');
         if (!ctx) {
@@ -66,7 +83,7 @@ export async function addDepotelWatermark(
           return;
         }
 
-        // Draw original photo
+        // Draw original photo resized cleanly
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
         // Date and Time formatting in Indonesian (WIB)

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { Camera, Upload, X, Check, RefreshCw, AlertCircle } from 'lucide-react';
+import { Camera, Upload, X, Check, RefreshCw, AlertCircle, Loader2, CloudUpload } from 'lucide-react';
 import { SiteItem, User, PhotoRecord, UpdateCategory } from '../types';
 import { addDepotelWatermark, getPhotoWatermarkBrand } from '../utils/watermark';
 
@@ -9,7 +9,7 @@ interface CameraModalProps {
   categoryTitle?: string;
   currentUser: User | null;
   onClose: () => void;
-  onSavePhoto: (siteId: string, photo: PhotoRecord) => void;
+  onSavePhoto: (siteId: string, photo: PhotoRecord) => Promise<void>;
 }
 
 export const CameraModal: React.FC<CameraModalProps> = ({
@@ -25,6 +25,11 @@ export const CameraModal: React.FC<CameraModalProps> = ({
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [previewWatermarked, setPreviewWatermarked] = useState<{ dataUrl: string; formattedTime: string; brandTitle: string } | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+
+  // Uploading / saving state
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [uploadSuccess, setUploadSuccess] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const directCameraInputRef = useRef<HTMLInputElement | null>(null);
@@ -73,6 +78,7 @@ export const CameraModal: React.FC<CameraModalProps> = ({
   const captureLiveFrame = async () => {
     if (!videoRef.current) return;
     setIsProcessing(true);
+    setUploadError(null);
     try {
       const video = videoRef.current;
       const canvas = document.createElement('canvas');
@@ -95,6 +101,7 @@ export const CameraModal: React.FC<CameraModalProps> = ({
       }
     } catch (err) {
       console.error('Error capturing live frame:', err);
+      setCameraError('Gagal mengambil frame foto kamera.');
     } finally {
       setIsProcessing(false);
     }
@@ -105,6 +112,7 @@ export const CameraModal: React.FC<CameraModalProps> = ({
     if (!file) return;
 
     setIsProcessing(true);
+    setUploadError(null);
     try {
       const watermarked = await addDepotelWatermark(
         file,
@@ -123,22 +131,41 @@ export const CameraModal: React.FC<CameraModalProps> = ({
     }
   };
 
-  const handleConfirmSave = () => {
-    if (!previewWatermarked) return;
+  const handleConfirmSave = async () => {
+    if (!previewWatermarked || isUploading) return;
+
+    setIsUploading(true);
+    setUploadError(null);
 
     const newPhoto: PhotoRecord = {
-      id: `photo-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
+      id: `photo-${site.siteId || 'site'}-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
       siteId: site.id,
       siteName: site.siteName,
       meterId: site.meterId,
       dataUrl: previewWatermarked.dataUrl,
       timestamp: new Date().toISOString(),
       capturedBy: currentUser?.name || 'Petugas',
+      capturedById: currentUser?.id || 'usr-anonymous',
+      categoryType: category?.type || 'swacam',
+      categoryTitle: category?.title || categoryTitle || '',
+      brandTitle: previewWatermarked.brandTitle || brandTitle,
       formattedTime: previewWatermarked.formattedTime,
     };
 
-    onSavePhoto(site.id, newPhoto);
-    onClose();
+    try {
+      await onSavePhoto(site.id, newPhoto);
+      setUploadSuccess(true);
+      setTimeout(() => {
+        onClose();
+      }, 700);
+    } catch (err: any) {
+      console.error('Photo save error:', err);
+      setUploadError(
+        err?.message || 'Gagal mengunggah foto ke penyimpanan permanen. Periksa koneksi internet lalu coba lagi.'
+      );
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   return (
@@ -161,11 +188,12 @@ export const CameraModal: React.FC<CameraModalProps> = ({
             </p>
           </div>
           <button
+            disabled={isUploading}
             onClick={() => {
               stopCamera();
               onClose();
             }}
-            className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition cursor-pointer"
+            className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition cursor-pointer disabled:opacity-40"
           >
             <X className="w-5 h-5" />
           </button>
@@ -189,6 +217,21 @@ export const CameraModal: React.FC<CameraModalProps> = ({
                   className="w-full max-h-[50vh] object-contain mx-auto"
                 />
               </div>
+
+              {uploadError && (
+                <div className="p-3 rounded-xl bg-red-950/70 border border-red-700 text-xs text-red-200 flex items-start gap-2 animate-in fade-in">
+                  <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+                  <span>{uploadError}</span>
+                </div>
+              )}
+
+              {uploadSuccess && (
+                <div className="p-3 rounded-xl bg-emerald-950/70 border border-emerald-700 text-xs text-emerald-200 flex items-center gap-2 animate-in fade-in">
+                  <Check className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span>Foto berhasil tersimpan secara permanen di database cloud!</span>
+                </div>
+              )}
+
               <div className="p-3 rounded-xl bg-blue-950/40 border border-blue-800/50 text-xs text-blue-200">
                 <p className="font-semibold text-emerald-400 flex items-center gap-1.5">
                   <Check className="w-4 h-4" />
@@ -244,7 +287,6 @@ export const CameraModal: React.FC<CameraModalProps> = ({
                 <button
                   type="button"
                   onClick={() => {
-                    // Coba buka kamera HP langsung via input capture
                     if (directCameraInputRef.current) {
                       directCameraInputRef.current.click();
                     } else {
@@ -265,7 +307,7 @@ export const CameraModal: React.FC<CameraModalProps> = ({
                   </div>
                 </button>
 
-                {/* Opsi 2: Pilih Dari Galeri / File (Tanpa buka kamera) */}
+                {/* Opsi 2: Pilih Dari Galeri / File */}
                 <button
                   type="button"
                   onClick={() => galleryInputRef.current?.click()}
@@ -294,7 +336,7 @@ export const CameraModal: React.FC<CameraModalProps> = ({
                 className="hidden"
               />
 
-              {/* Input khusus Galeri HP / File (murni tanpa capture agar langsung ke galeri foto) */}
+              {/* Input khusus Galeri HP / File */}
               <input
                 ref={galleryInputRef}
                 type="file"
@@ -303,7 +345,6 @@ export const CameraModal: React.FC<CameraModalProps> = ({
                 className="hidden"
               />
 
-              {/* Opsi alternatif kamera live streaming di browser */}
               <div className="pt-1 text-center">
                 <button
                   type="button"
@@ -315,9 +356,9 @@ export const CameraModal: React.FC<CameraModalProps> = ({
               </div>
 
               <div className="p-3 rounded-xl bg-slate-800/40 border border-slate-800 text-[11px] text-slate-400 space-y-1">
-                <p className="font-semibold text-slate-300">ℹ️ Ketentuan Dokumentasi Foto:</p>
+                <p className="font-semibold text-slate-300">Ketentuan Dokumentasi Foto:</p>
                 <p>• Foto akan otomatis distempel dengan Site ID, Nama Site, Meter ID, serta Waktu Lengkap (Tanggal & Jam WIB).</p>
-                <p>• Foto tersimpan aman di basis data offline (IndexedDB) tanpa masa kedaluwarsa.</p>
+                <p>• Foto diunggah dan disimpan permanen di database cloud tanpa batasan masa kedaluwarsa.</p>
               </div>
             </div>
           )}
@@ -327,17 +368,36 @@ export const CameraModal: React.FC<CameraModalProps> = ({
         {previewWatermarked && (
           <div className="pt-3 border-t border-slate-800 flex items-center justify-end gap-2">
             <button
-              onClick={() => setPreviewWatermarked(null)}
-              className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-sm cursor-pointer"
+              disabled={isUploading}
+              onClick={() => {
+                setPreviewWatermarked(null);
+                setUploadError(null);
+              }}
+              className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-sm cursor-pointer disabled:opacity-50"
             >
               Foto Ulang
             </button>
             <button
+              disabled={isUploading || uploadSuccess}
               onClick={handleConfirmSave}
-              className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm shadow-lg shadow-emerald-900/40 flex items-center gap-2 cursor-pointer"
+              className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm shadow-lg shadow-emerald-900/40 flex items-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <Check className="w-4 h-4" />
-              <span>Simpan Foto Permanen</span>
+              {isUploading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin text-white" />
+                  <span>Menyimpan ke Database...</span>
+                </>
+              ) : uploadSuccess ? (
+                <>
+                  <Check className="w-4 h-4 text-emerald-200" />
+                  <span>Tersimpan!</span>
+                </>
+              ) : (
+                <>
+                  <CloudUpload className="w-4 h-4 text-emerald-200" />
+                  <span>Simpan Foto Permanen</span>
+                </>
+              )}
             </button>
           </div>
         )}

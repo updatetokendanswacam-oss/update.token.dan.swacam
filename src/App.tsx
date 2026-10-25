@@ -34,6 +34,10 @@ import {
   deleteUserFromFirestore,
   isVerifiedAdmin,
   BOOTSTRAPPED_ADMIN_EMAILS,
+  savePhotoPermanently,
+  deletePhotoPermanently,
+  subscribeToPhotos,
+  loadAllPhotosFromFirestore,
 } from './utils/firestoreService';
 import { INITIAL_CATEGORIES, INITIAL_USERS } from './utils/initialData';
 import { Header } from './components/Header';
@@ -96,6 +100,7 @@ export default function App() {
   const [cameraSite, setCameraSite] = useState<SiteItem | null>(null);
   const [cameraCategory, setCameraCategory] = useState<UpdateCategory | null>(null);
   const [viewingPhoto, setViewingPhoto] = useState<{ site: SiteItem; index: number } | null>(null);
+  const [allPhotos, setAllPhotos] = useState<PhotoRecord[]>([]);
   const [deleteModalState, setDeleteModalState] = useState<{
     type: 'site' | 'category';
     site?: SiteItem;
@@ -192,6 +197,74 @@ export default function App() {
       unsubscribeCats();
     };
   }, []);
+
+  // Real-time subscription to permanent documentation photos in Firestore
+  useEffect(() => {
+    const unsubscribePhotos = subscribeToPhotos((remotePhotos) => {
+      if (remotePhotos) {
+        setAllPhotos(remotePhotos);
+      }
+    });
+
+    return () => {
+      unsubscribePhotos();
+    };
+  }, []);
+
+  // Hydrate & synchronize permanent cloud photos into category sites
+  useEffect(() => {
+    if (allPhotos.length === 0) return;
+
+    setCategories((prevCategories) => {
+      let changed = false;
+      const updated = prevCategories.map((cat) => {
+        const updatedSites = cat.sites.map((site) => {
+          const siteCloudPhotos = allPhotos.filter((p) => p.siteId === site.id);
+          if (siteCloudPhotos.length === 0) return site;
+
+          const existingPhotoMap = new Map((site.photos || []).map((p) => [p.id, p]));
+          let siteChanged = false;
+
+          const mergedPhotos: PhotoRecord[] = siteCloudPhotos.map((cloudPhoto) => {
+            const existing = existingPhotoMap.get(cloudPhoto.id);
+            if (!existing) {
+              siteChanged = true;
+              return cloudPhoto;
+            }
+            if ((!existing.dataUrl && cloudPhoto.dataUrl) || (!existing.storageUrl && cloudPhoto.storageUrl)) {
+              siteChanged = true;
+              return {
+                ...existing,
+                dataUrl: cloudPhoto.dataUrl || existing.dataUrl,
+                storageUrl: cloudPhoto.storageUrl || existing.storageUrl,
+              };
+            }
+            return existing;
+          });
+
+          // Retain any pending local photos not yet emitted by snapshot
+          for (const localPhoto of site.photos || []) {
+            if (!siteCloudPhotos.some((cp) => cp.id === localPhoto.id)) {
+              mergedPhotos.push(localPhoto);
+            }
+          }
+
+          if (siteChanged || mergedPhotos.length !== (site.photos || []).length) {
+            changed = true;
+            return {
+              ...site,
+              photos: mergedPhotos,
+            };
+          }
+          return site;
+        });
+
+        return { ...cat, sites: updatedSites };
+      });
+
+      return changed ? updated : prevCategories;
+    });
+  }, [allPhotos]);
 
   // Debounced persistence to eliminate UI blocking on frequent updates
   useEffect(() => {
@@ -562,65 +635,73 @@ export default function App() {
     });
   }, [currentUser?.name]);
 
-  // Photo Watermarking & IndexedDB Storage (Menyimpan foto tanpa mengubah status centang secara otomatis)
-  const handleSavePhoto = useCallback(async (siteId: string, photo: PhotoRecord) => {
-    try {
-      await savePhotoToDB(photo);
+  // Photo Permanent Storage & Synchronization
+  const handleSavePhoto = useCallback(async (siteId: string, photo: PhotoRecord): Promise<void> => {
+    // 1. Upload to Cloud Storage & Firestore permanent collection FIRST
+    const savedPhoto = await savePhotoPermanently(photo);
 
-      setCategories((prevCategories) => {
-        const updated = updateSiteGlobally(prevCategories, siteId, (site) => {
-          const existingPhotos = site.photos || [];
-          return {
-            ...site,
-            photos: [...existingPhotos, photo],
-            updatedAt: new Date().toISOString(),
-            updatedBy: currentUser?.name || 'Petugas',
-          };
-        });
-        saveCategories(updated);
-        updated.forEach((c) => {
-          if (c.sites.some((s) => s.id === siteId)) {
-            saveCategoryToFirestore(c).catch((e) => console.error(e));
-          }
-        });
-        return updated;
+    // 2. Update allPhotos and local categories state
+    setAllPhotos((prev) => [savedPhoto, ...prev.filter((p) => p.id !== savedPhoto.id)]);
+
+    setCategories((prevCategories) => {
+      const updated = updateSiteGlobally(prevCategories, siteId, (site) => {
+        const existingPhotos = site.photos || [];
+        const exists = existingPhotos.some((p) => p.id === savedPhoto.id);
+        const newPhotos = exists
+          ? existingPhotos.map((p) => (p.id === savedPhoto.id ? savedPhoto : p))
+          : [...existingPhotos, savedPhoto];
+        return {
+          ...site,
+          photos: newPhotos,
+          updatedAt: new Date().toISOString(),
+          updatedBy: currentUser?.name || 'Petugas',
+        };
       });
+      saveCategories(updated);
+      updated.forEach((c) => {
+        if (c.sites.some((s) => s.id === siteId)) {
+          saveCategoryToFirestore(c).catch((e) => console.error('Category sync error:', e));
+        }
+      });
+      return updated;
+    });
 
-      setCameraSite(null);
-      showToast('Foto dokumentasi SWACAM tersimpan');
-    } catch (err) {
-      console.error('Failed to save photo record:', err);
-      showToast('Gagal menyimpan foto dokumentasi');
-    }
+    setCameraSite(null);
+    setCameraCategory(null);
+    showToast(`Foto dokumentasi (${savedPhoto.brandTitle || 'DEPOTEL'}) berhasil tersimpan permanen`);
   }, [currentUser?.name, showToast]);
 
-  const handleDeletePhoto = useCallback(async (photoId: string) => {
-    try {
-      await deletePhotoFromDB(photoId);
-
-      setCategories((prevCategories) => {
-        const updated = prevCategories.map((cat) => ({
-          ...cat,
-          sites: cat.sites.map((site) => {
-            if (!site.photos) return site;
-            return {
-              ...site,
-              photos: site.photos.filter((p) => p.id !== photoId),
-            };
-          }),
-        }));
-        saveCategories(updated);
-        updated.forEach((c) => saveCategoryToFirestore(c).catch((e) => console.error(e)));
-        return updated;
-      });
-
-      setViewingPhoto(null);
-      showToast('Foto berhasil dihapus');
-    } catch (err) {
-      console.error('Failed to delete photo:', err);
-      showToast('Gagal menghapus foto');
+  const handleDeletePhoto = useCallback(async (siteId: string, photoId: string): Promise<void> => {
+    if (currentUser?.role !== 'admin') {
+      const msg = 'Akses ditolak: Hanya Administrator yang berwenang menghapus foto dokumentasi.';
+      showToast(msg);
+      throw new Error(msg);
     }
-  }, [showToast]);
+
+    const targetPhoto = allPhotos.find((p) => p.id === photoId);
+    await deletePhotoPermanently(photoId, targetPhoto?.storagePath);
+
+    setAllPhotos((prev) => prev.filter((p) => p.id !== photoId));
+
+    setCategories((prevCategories) => {
+      const updated = prevCategories.map((cat) => ({
+        ...cat,
+        sites: cat.sites.map((site) => {
+          if (!site.photos) return site;
+          return {
+            ...site,
+            photos: site.photos.filter((p) => p.id !== photoId),
+          };
+        }),
+      }));
+      saveCategories(updated);
+      updated.forEach((c) => saveCategoryToFirestore(c).catch((e) => console.error(e)));
+      return updated;
+    });
+
+    setViewingPhoto(null);
+    showToast('Foto dokumentasi berhasil dihapus permanen oleh Administrator');
+  }, [currentUser?.role, allPhotos, showToast]);
 
   // Site Edit & Add (Diperbarui di semua kategori)
   const handleEditSite = useCallback((site: SiteItem) => {

@@ -17,9 +17,18 @@ export interface PhotoRecord {
   siteName: string;
   meterId: string;
   dataUrl: string;
+  storageUrl?: string;
+  storagePath?: string;
   timestamp: string; // ISO string
   capturedBy: string;
+  capturedById?: string;
+  categoryType?: 'token' | 'swacam' | 'token_manual' | 'custom';
+  categoryTitle?: string;
+  brandTitle?: string;
   formattedTime: string;
+  fileSize?: number;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface SiteItem {
