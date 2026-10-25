@@ -10,12 +10,25 @@ import {
   orderBy,
   Unsubscribe
 } from 'firebase/firestore';
-import { ref, uploadString, getDownloadURL, deleteObject } from 'firebase/storage';
+import { ref, uploadString, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { User as FirebaseUser } from 'firebase/auth';
 import { db, storage } from '../firebase';
 import { UpdateCategory, User, InviteLink, PhotoRecord } from '../types';
 import { INITIAL_CATEGORIES, INITIAL_USERS } from './initialData';
 import { savePhotoToDB, deletePhotoFromDB } from './storage';
+
+function dataURLtoBlob(dataurl: string): Blob {
+  const parts = dataurl.split(',');
+  const mimeMatch = parts[0].match(/:(.*?);/);
+  const mime = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+  const bstr = atob(parts[1]);
+  let n = bstr.length;
+  const u8arr = new Uint8Array(n);
+  while (n--) {
+    u8arr[n] = bstr.charCodeAt(n);
+  }
+  return new Blob([u8arr], { type: mime });
+}
 
 export const BOOTSTRAPPED_ADMIN_EMAILS: string[] = [
   'updatetokendanswacam@gmail.com',
@@ -387,16 +400,26 @@ export async function savePhotoPermanently(photo: PhotoRecord): Promise<PhotoRec
   let storageUrl = photo.storageUrl || '';
   let storagePath = photo.storagePath || '';
 
-  // 1. Attempt upload to Firebase Cloud Storage
+  // 1. Attempt upload to Firebase Cloud Storage via binary Blob (faster than base64)
   if (storage && photo.dataUrl && photo.dataUrl.startsWith('data:')) {
     try {
       const generatedPath = `photos/${photo.siteId}/${photo.id}.jpg`;
       const storageRef = ref(storage, generatedPath);
-      await uploadString(storageRef, photo.dataUrl, 'data_url');
+      const blob = dataURLtoBlob(photo.dataUrl);
+      await uploadBytes(storageRef, blob, { contentType: 'image/jpeg' });
       storageUrl = await getDownloadURL(storageRef);
       storagePath = generatedPath;
     } catch (err) {
-      console.warn('Firebase Cloud Storage notice (fallback to Firestore document):', err);
+      console.warn('Firebase Cloud Storage binary upload notice, trying string fallback:', err);
+      try {
+        const generatedPath = `photos/${photo.siteId}/${photo.id}.jpg`;
+        const storageRef = ref(storage, generatedPath);
+        await uploadString(storageRef, photo.dataUrl, 'data_url');
+        storageUrl = await getDownloadURL(storageRef);
+        storagePath = generatedPath;
+      } catch (e2) {
+        console.warn('Firebase Cloud Storage notice (fallback to Firestore document):', e2);
+      }
     }
   }
 

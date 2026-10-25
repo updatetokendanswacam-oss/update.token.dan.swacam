@@ -1,6 +1,11 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
-import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
+import {
+  getFirestore,
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+} from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import bundledConfig from '../firebase-applet-config.json';
 
@@ -30,20 +35,19 @@ googleProvider.setCustomParameters({
   prompt: 'select_account',
 });
 
-// Initialize Firestore with the exact designated database ID
-export const db = firebaseConfig.firestoreDatabaseId
-  ? getFirestore(app, firebaseConfig.firestoreDatabaseId)
-  : getFirestore(app);
+// Initialize Firestore with persistent local cache for multi-tab stability & instant offline access
+export const db = (() => {
+  const dbId = firebaseConfig.firestoreDatabaseId;
+  try {
+    return initializeFirestore(app, {
+      localCache: persistentLocalCache({
+        tabManager: persistentMultipleTabManager(),
+      }),
+    }, dbId);
+  } catch {
+    return dbId ? getFirestore(app, dbId) : getFirestore(app);
+  }
+})();
 
 // Initialize Firebase Cloud Storage
 export const storage = getStorage(app);
-
-// Connectivity validation
-async function testConnection() {
-  try {
-    await getDocFromServer(doc(db, 'test', 'connection'));
-  } catch (error) {
-    // Graceful offline fallback
-  }
-}
-testConnection();

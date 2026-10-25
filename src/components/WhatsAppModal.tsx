@@ -22,21 +22,31 @@ export const WhatsAppModal: React.FC<WhatsAppModalProps> = ({
       : '0,00';
 
   const buildWhatsAppText = () => {
-    const header = `${category.title} ${category.period}\nJumlah Tiket Site : ${totalSites} Site\n✅ Sudah Tercentang : ${checkedSites} Site\n❌ Belum Tercentang : ${uncheckedSites} Site\n📊 Submitted : ${percentage}%\n=================================\n`;
+    const titleLine = category.title ? category.title.trim() : 'Update List – DEPOTEL';
+    const periodLine = category.period ? category.period.trim() : 'Bulan Oktober 2026';
+
+    const header = `${titleLine}\n${periodLine}\nJumlah Tiket Site : ${totalSites} Site\n✅ Sudah Tercentang : ${checkedSites} Site\n❌ Belum Tercentang : ${uncheckedSites} Site\n📊 Submitted : ${percentage}%\n=================================`;
 
     const listLines = category.sites.map((site) => {
       const icon = site.checked ? '✅' : '❌';
-      let line = `${icon} ${site.meterId} | ${site.siteName}`;
+      const meterStr = site.meterId && site.meterId.trim() !== '' ? site.meterId.trim() : '-';
+      const siteNameStr = site.siteName && site.siteName.trim() !== '' ? site.siteName.trim() : (site.siteId || '-');
+
+      let line = `${icon} ${meterStr} | ${siteNameStr}`;
+
       if (site.tokens && site.tokens.length > 0) {
         const tokensFormatted = site.tokens
-          .map((t) => t.replace(/^#\s*/, ''))
+          .map((t) => t.trim().replace(/^#\s*/, ''))
+          .filter((t) => t.length > 0)
           .join('\n');
-        line += `\n${tokensFormatted}`;
+        if (tokensFormatted) {
+          line += `\n${tokensFormatted}`;
+        }
       }
       return line;
     });
 
-    return header + listLines.join('\n');
+    return `${header}\n${listLines.join('\n')}`;
   };
 
   const whatsappText = buildWhatsAppText();
