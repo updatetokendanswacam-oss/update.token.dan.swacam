@@ -30,9 +30,23 @@ export const WhatsAppModal: React.FC<WhatsAppModalProps> = ({
     const listLines = category.sites.map((site) => {
       const icon = site.checked ? '✅' : '❌';
       const meterStr = site.meterId && site.meterId.trim() !== '' ? site.meterId.trim() : '-';
-      const siteNameStr = site.siteName && site.siteName.trim() !== '' ? site.siteName.trim() : (site.siteId || '-');
+      const cleanSiteId = site.siteId ? site.siteId.trim().toUpperCase() : '';
+      const cleanSiteName = site.siteName ? site.siteName.trim() : '';
 
-      let line = `${icon} ${meterStr} | ${siteNameStr}`;
+      let nameDisplay = '-';
+      if (cleanSiteId && cleanSiteName) {
+        if (cleanSiteName.toUpperCase().includes(cleanSiteId)) {
+          nameDisplay = cleanSiteName;
+        } else {
+          nameDisplay = `${cleanSiteId}_${cleanSiteName}`;
+        }
+      } else if (cleanSiteName) {
+        nameDisplay = cleanSiteName;
+      } else if (cleanSiteId) {
+        nameDisplay = cleanSiteId;
+      }
+
+      let line = `${icon} ${meterStr} | ${nameDisplay}`;
 
       if (site.tokens && site.tokens.length > 0) {
         const tokensFormatted = site.tokens
