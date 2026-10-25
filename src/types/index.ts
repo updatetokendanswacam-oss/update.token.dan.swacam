@@ -38,7 +38,6 @@ export interface SiteItem {
   siteName: string;// Nama Site
   checked: boolean;
   checkedBy?: string; // Nama petugas yang menceklis
-  checkedAt?: string; // ISO timestamp saat diceklis
   tokens?: string[]; // No Token Listrik (multiple tokens support)
   photos?: PhotoRecord[];
   updatedAt?: string;

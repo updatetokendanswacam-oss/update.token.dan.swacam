@@ -85,7 +85,7 @@ const SiteItemCard: React.FC<SiteItemCardProps> = React.memo(({
 
           {/* Site Information */}
           <div className="min-w-0 flex-1">
-            {/* Meter ID, Site ID Tag & Checked By User */}
+            {/* Meter ID & Site ID Tag & Checked By */}
             <div className="flex items-center gap-2 flex-wrap">
               <span className="font-mono text-sm sm:text-base font-bold text-slate-800">
                 {site.meterId || '-'}
@@ -96,9 +96,8 @@ const SiteItemCard: React.FC<SiteItemCardProps> = React.memo(({
                 </span>
               )}
               {site.checked && (
-                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200/90 text-xs font-bold animate-in fade-in">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                  <span>Diceklis: {site.checkedBy || site.updatedBy || 'Petugas'}</span>
+                <span className="px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-semibold flex items-center gap-1">
+                  ✓ {site.checkedBy || site.updatedBy || 'Petugas'}
                 </span>
               )}
             </div>
