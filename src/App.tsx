@@ -76,12 +76,40 @@ export default function App() {
   const [activeNav, setActiveNav] = useState<'dashboard' | 'settings'>('dashboard');
   const [isOpenMobileSidebar, setIsOpenMobileSidebar] = useState(false);
 
-  // View state within site monitoring: 'overview' or 'detail'
-  const [viewMode, setViewMode] = useState<'overview' | 'detail'>('overview');
+  // View state within site monitoring: 'overview' or 'detail' (Persisted across page reloads & refreshes)
+  const [viewMode, setViewMode] = useState<'overview' | 'detail'>(() => {
+    if (typeof window !== 'undefined') {
+      const savedView = localStorage.getItem('depotel_active_view_mode');
+      if (savedView === 'detail' || savedView === 'overview') {
+        return savedView;
+      }
+    }
+    return 'overview';
+  });
+
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      const savedCat = localStorage.getItem('depotel_selected_category_id');
+      if (savedCat) {
+        return savedCat;
+      }
+    }
     const cats = loadCategories();
     return cats[0]?.id || 'cat-token-manual';
   });
+
+  // Save navigation view state when user toggles categories or views
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('depotel_active_view_mode', viewMode);
+    }
+  }, [viewMode]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('depotel_selected_category_id', selectedCategoryId);
+    }
+  }, [selectedCategoryId]);
 
   // Modals state
   const [showUserManagement, setShowUserManagement] = useState(false);
@@ -367,11 +395,18 @@ export default function App() {
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
-    await new Promise((r) => setTimeout(r, 600));
+    try {
+      const remotePhotos = await loadAllPhotosFromFirestore();
+      if (remotePhotos && remotePhotos.length > 0) {
+        setAllPhotos(remotePhotos);
+      }
+    } catch (err) {
+      console.warn('Refresh photo sync notice:', err);
+    }
     setCategories(loadCategories());
     setUsers(loadUsers());
     setIsRefreshing(false);
-    showToast('Data berhasil diperbarui');
+    showToast('Data & foto berhasil diperbarui');
   };
 
   // Find currently open category (memoized)
