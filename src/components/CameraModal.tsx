@@ -131,11 +131,10 @@ export const CameraModal: React.FC<CameraModalProps> = ({
     }
   };
 
-  const handleConfirmSave = async () => {
+  const handleConfirmSave = () => {
     if (!previewWatermarked || isUploading) return;
 
     setIsUploading(true);
-    setUploadError(null);
 
     const newPhoto: PhotoRecord = {
       id: `photo-${site.siteId || 'site'}-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
@@ -152,20 +151,10 @@ export const CameraModal: React.FC<CameraModalProps> = ({
       formattedTime: previewWatermarked.formattedTime,
     };
 
-    try {
-      await onSavePhoto(site.id, newPhoto);
-      setUploadSuccess(true);
-      setTimeout(() => {
-        onClose();
-      }, 250);
-    } catch (err: any) {
-      console.error('Photo save error:', err);
-      setUploadError(
-        err?.message || 'Gagal mengunggah foto ke penyimpanan permanen. Periksa koneksi internet lalu coba lagi.'
-      );
-    } finally {
-      setIsUploading(false);
-    }
+    // Optimistically trigger save handler & close modal instantly (0ms delay)
+    stopCamera();
+    onSavePhoto(site.id, newPhoto);
+    onClose();
   };
 
   return (

@@ -647,21 +647,18 @@ export default function App() {
     });
   }, [currentUser?.name]);
 
-  // Photo Permanent Storage & Synchronization
+  // Photo Permanent Storage & Synchronization (Optimistic & Instant 0ms Latency)
   const handleSavePhoto = useCallback(async (siteId: string, photo: PhotoRecord): Promise<void> => {
-    // 1. Upload to Cloud Storage & Firestore permanent collection FIRST (<150ms)
-    const savedPhoto = await savePhotoPermanently(photo);
-
-    // 2. Update allPhotos and local categories state immediately
-    setAllPhotos((prev) => [savedPhoto, ...prev.filter((p) => p.id !== savedPhoto.id)]);
+    // 1. Instantly update local React state and storage so UI responds in 0ms
+    setAllPhotos((prev) => [photo, ...prev.filter((p) => p.id !== photo.id)]);
 
     setCategories((prevCategories) => {
       const updated = updateSiteGlobally(prevCategories, siteId, (site) => {
         const existingPhotos = site.photos || [];
-        const exists = existingPhotos.some((p) => p.id === savedPhoto.id);
+        const exists = existingPhotos.some((p) => p.id === photo.id);
         const newPhotos = exists
-          ? existingPhotos.map((p) => (p.id === savedPhoto.id ? savedPhoto : p))
-          : [...existingPhotos, savedPhoto];
+          ? existingPhotos.map((p) => (p.id === photo.id ? photo : p))
+          : [...existingPhotos, photo];
         return {
           ...site,
           photos: newPhotos,
@@ -671,21 +668,45 @@ export default function App() {
       });
 
       saveCategories(updated);
-
-      setTimeout(() => {
-        updated.forEach((c) => {
-          if (c.sites.some((s) => s.id === siteId)) {
-            saveCategoryToFirestore(c).catch((e) => console.error('Category photo sync notice:', e));
-          }
-        });
-      }, 0);
-
       return updated;
     });
 
     setCameraSite(null);
     setCameraCategory(null);
-    showToast(`Foto dokumentasi (${savedPhoto.brandTitle || 'DEPOTEL'}) berhasil tersimpan permanen`);
+    showToast(`Foto (${photo.brandTitle || 'DEPOTEL'}) berhasil tersimpan`);
+
+    // 2. Perform Firebase Cloud Storage upload and Firestore write in background without blocking UI
+    setTimeout(async () => {
+      try {
+        const savedPhoto = await savePhotoPermanently(photo);
+
+        // Update with permanent storageUrl once background write completes
+        setAllPhotos((prev) => [savedPhoto, ...prev.filter((p) => p.id !== savedPhoto.id)]);
+
+        setCategories((prevCategories) => {
+          const updated = updateSiteGlobally(prevCategories, siteId, (site) => {
+            const existingPhotos = site.photos || [];
+            const newPhotos = existingPhotos.map((p) => (p.id === savedPhoto.id ? savedPhoto : p));
+            return {
+              ...site,
+              photos: newPhotos,
+            };
+          });
+
+          saveCategories(updated);
+
+          updated.forEach((c) => {
+            if (c.sites.some((s) => s.id === siteId)) {
+              saveCategoryToFirestore(c).catch((e) => console.error('Category photo sync notice:', e));
+            }
+          });
+
+          return updated;
+        });
+      } catch (err) {
+        console.warn('Background photo upload notice:', err);
+      }
+    }, 0);
   }, [currentUser?.name, showToast]);
 
   const handleDeletePhoto = useCallback(async (siteId: string, photoId: string): Promise<void> => {
