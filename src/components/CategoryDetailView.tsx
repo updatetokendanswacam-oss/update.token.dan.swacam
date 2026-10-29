@@ -316,7 +316,8 @@ export const CategoryDetailView: React.FC<CategoryDetailViewProps> = React.memo(
   );
 
   const isSwacam = category.type === 'swacam';
-  const badgeText = isSwacam ? 'SWACAM / CATAT METER' : 'TOKEN LISTRIK';
+  const isNeteco = category.type === 'neteco_unmon' || category.title.toLowerCase().includes('neteco');
+  const badgeText = isNeteco ? 'LIST NETECO UNMON' : (isSwacam ? 'SWACAM / CATAT METER' : 'TOKEN LISTRIK');
   const isAdmin = currentUser?.role === 'admin';
 
   // Filtered sites with memoization

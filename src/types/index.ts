@@ -22,7 +22,7 @@ export interface PhotoRecord {
   timestamp: string; // ISO string
   capturedBy: string;
   capturedById?: string;
-  categoryType?: 'token' | 'swacam' | 'token_manual' | 'custom';
+  categoryType?: 'token' | 'swacam' | 'token_manual' | 'neteco_unmon' | 'custom';
   categoryTitle?: string;
   brandTitle?: string;
   formattedTime: string;
@@ -48,7 +48,7 @@ export interface UpdateCategory {
   id: string;
   title: string;       // e.g. "Pengisian Token Listrik - DEPOTEL"
   period: string;      // e.g. "Bulan September 2026"
-  type: 'token' | 'swacam' | 'token_manual' | 'custom';
+  type: 'token' | 'swacam' | 'token_manual' | 'neteco_unmon' | 'custom';
   customTypeName?: string; // Tipe atau nama kategori kustom yang diketik pengguna
   sites: SiteItem[];
   allowCamera: boolean;

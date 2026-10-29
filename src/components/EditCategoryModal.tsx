@@ -15,7 +15,7 @@ export const EditCategoryModal: React.FC<EditCategoryModalProps> = ({
 }) => {
   const [title, setTitle] = useState(category.title);
   const [period, setPeriod] = useState(category.period);
-  const [type, setType] = useState<'token' | 'swacam' | 'token_manual' | 'custom'>(category.type || 'token');
+  const [type, setType] = useState<'token' | 'swacam' | 'token_manual' | 'neteco_unmon' | 'custom'>(category.type || 'token');
   const [isCustomMode, setIsCustomMode] = useState(category.type === 'custom');
   const [customTypeName, setCustomTypeName] = useState(category.customTypeName || '');
   const [allowCamera, setAllowCamera] = useState(category.allowCamera);
@@ -40,7 +40,7 @@ export const EditCategoryModal: React.FC<EditCategoryModalProps> = ({
       period: period.trim() || category.period,
       type: resolvedType,
       customTypeName: isCustomMode && customTypeName.trim() ? customTypeName.trim() : undefined,
-      allowCamera: resolvedType === 'custom' ? allowCamera : (resolvedType === 'swacam' || resolvedType === 'token_manual'),
+      allowCamera: resolvedType === 'custom' ? allowCamera : (resolvedType === 'swacam' || resolvedType === 'token_manual' || resolvedType === 'neteco_unmon'),
       allowTokenInput: resolvedType === 'custom' ? allowTokenInput : (resolvedType === 'token' || resolvedType === 'token_manual'),
     };
 
@@ -184,6 +184,7 @@ export const EditCategoryModal: React.FC<EditCategoryModalProps> = ({
                     return;
                   }
                   setType(val);
+                  setIsCustomMode(false);
                   if (val === 'token') {
                     setAllowCamera(category.allowCamera);
                     setAllowTokenInput(true);
@@ -193,6 +194,9 @@ export const EditCategoryModal: React.FC<EditCategoryModalProps> = ({
                   } else if (val === 'swacam') {
                     setAllowCamera(true);
                     setAllowTokenInput(false);
+                  } else if (val === 'neteco_unmon') {
+                    setAllowCamera(true);
+                    setAllowTokenInput(false);
                   }
                 }}
                 className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm text-slate-900 focus:outline-none focus:border-blue-600 transition bg-white"
@@ -200,6 +204,7 @@ export const EditCategoryModal: React.FC<EditCategoryModalProps> = ({
                 <option value="swacam">Swacam / Catat Meter (Kamera KWh Meter)</option>
                 <option value="token">Token Listrik (Hanya No. Token)</option>
                 <option value="token_manual">Token Listrik Manual (No. Token & Kamera Dokumentasi)</option>
+                <option value="neteco_unmon">List NETECO UNMON Eastern JABO (48 Site)</option>
                 <option value="custom">Kategori Kustom...</option>
               </select>
             )}

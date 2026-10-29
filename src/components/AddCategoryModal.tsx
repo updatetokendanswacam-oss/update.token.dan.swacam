@@ -16,12 +16,12 @@ export const AddCategoryModal: React.FC<AddCategoryModalProps> = ({
 }) => {
   const [title, setTitle] = useState('');
   const [period, setPeriod] = useState('Bulan November 2026');
-  const [type, setType] = useState<'token' | 'swacam' | 'token_manual' | 'custom'>('token');
+  const [type, setType] = useState<'token' | 'swacam' | 'token_manual' | 'neteco_unmon' | 'custom'>('token');
   const [isCustomMode, setIsCustomMode] = useState(false);
   const [customTypeName, setCustomTypeName] = useState('');
   const [allowCamera, setAllowCamera] = useState(false);
   const [allowTokenInput, setAllowTokenInput] = useState(true);
-  const [templateSource, setTemplateSource] = useState<'token_31' | 'swacam_22' | 'manual_6'>('token_31');
+  const [templateSource, setTemplateSource] = useState<'token_31' | 'swacam_22' | 'manual_6' | 'neteco_48'>('token_31');
   const [errorMessage, setErrorMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -43,6 +43,8 @@ export const AddCategoryModal: React.FC<AddCategoryModalProps> = ({
       sourceCategory = existingCategories.find((c) => c.type === 'swacam') || INITIAL_CATEGORIES.find((c) => c.type === 'swacam');
     } else if (templateSource === 'manual_6') {
       sourceCategory = existingCategories.find((c) => c.type === 'token_manual') || INITIAL_CATEGORIES.find((c) => c.type === 'token_manual');
+    } else if (templateSource === 'neteco_48') {
+      sourceCategory = existingCategories.find((c) => c.type === 'neteco_unmon') || INITIAL_CATEGORIES.find((c) => c.type === 'neteco_unmon');
     } else {
       sourceCategory = existingCategories.find((c) => c.type === 'token') || INITIAL_CATEGORIES.find((c) => c.type === 'token');
     }
@@ -76,7 +78,7 @@ export const AddCategoryModal: React.FC<AddCategoryModalProps> = ({
       type: resolvedType,
       customTypeName: isCustomMode && customTypeName.trim() ? customTypeName.trim() : undefined,
       sites: initialSites,
-      allowCamera: resolvedType === 'custom' ? allowCamera : (resolvedType === 'swacam' || resolvedType === 'token_manual'),
+      allowCamera: resolvedType === 'custom' ? allowCamera : (resolvedType === 'swacam' || resolvedType === 'token_manual' || resolvedType === 'neteco_unmon'),
       allowTokenInput: resolvedType === 'custom' ? allowTokenInput : (resolvedType === 'token' || resolvedType === 'token_manual'),
     };
 
@@ -163,6 +165,7 @@ export const AddCategoryModal: React.FC<AddCategoryModalProps> = ({
               <option value="token_31">Pengisian Token Listrik SWFM – DEPOTEL (31 Site)</option>
               <option value="swacam_22">Update Swacam / Catat Meter – DEPOTEL (22 Site)</option>
               <option value="manual_6">Pengisian Token Listrik Manual – DEPOTEL (6 Site)</option>
+              <option value="neteco_48">List NETECO UNMON Eastern JABO (48 Site)</option>
             </select>
           </div>
 
@@ -248,6 +251,7 @@ export const AddCategoryModal: React.FC<AddCategoryModalProps> = ({
                       return;
                     }
                     setType(val);
+                    setIsCustomMode(false);
                     if (val === 'token') {
                       setAllowCamera(false);
                       setAllowTokenInput(true);
@@ -260,6 +264,10 @@ export const AddCategoryModal: React.FC<AddCategoryModalProps> = ({
                       setAllowCamera(true);
                       setAllowTokenInput(false);
                       setTemplateSource('swacam_22');
+                    } else if (val === 'neteco_unmon') {
+                      setAllowCamera(true);
+                      setAllowTokenInput(false);
+                      setTemplateSource('neteco_48');
                     }
                   }}
                   className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm text-slate-900 focus:outline-none focus:border-blue-600 transition bg-white"
@@ -267,6 +275,7 @@ export const AddCategoryModal: React.FC<AddCategoryModalProps> = ({
                   <option value="token">+ Token Listrik (Hanya No. Token)</option>
                   <option value="token_manual">+ Token Listrik Manual (No. Token & Kamera Dokumentasi)</option>
                   <option value="swacam">+ Swacam / Catat Meter (Kamera KWh Meter)</option>
+                  <option value="neteco_unmon">+ List NETECO UNMON Eastern JABO (48 Site)</option>
                   <option value="custom">+ Ketik / Tambah Kategori Lain...</option>
                 </select>
               </div>

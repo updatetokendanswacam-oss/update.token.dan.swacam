@@ -22,14 +22,23 @@ export const WhatsAppModal: React.FC<WhatsAppModalProps> = ({
       : '0,00';
 
   const buildWhatsAppText = () => {
+    const isNeteco = category.type === 'neteco_unmon' || category.title.toLowerCase().includes('neteco');
+
     const titleLine = category.title ? category.title.trim() : 'Update List – DEPOTEL';
     const periodLine = category.period ? category.period.trim() : 'Bulan Oktober 2026';
 
-    const header = `${titleLine}\n${periodLine}\nJumlah Tiket Site : ${totalSites} Site\n✅ Sudah Tercentang : ${checkedSites} Site\n❌ Belum Tercentang : ${uncheckedSites} Site\n📊 Submitted : ${percentage}%\n=================================`;
+    let header = '';
+    if (isNeteco) {
+      // Calculate integer percentage if whole number, e.g. 71%
+      const percentageInt = totalSites > 0 ? Math.round((checkedSites / totalSites) * 100) : 0;
+      header = `${titleLine}\n${periodLine}\nJumlah Site NETECO : ${totalSites}\nSubmitted NETECO : ${percentageInt}%\n==============================`;
+    } else {
+      header = `${titleLine}\n${periodLine}\nJumlah Tiket Site : ${totalSites} Site\n✅ Sudah Tercentang : ${checkedSites} Site\n❌ Belum Tercentang : ${uncheckedSites} Site\n📊 Submitted : ${percentage}%\n=================================`;
+    }
 
     const listLines = category.sites.map((site) => {
       const icon = site.checked ? '✅' : '❌';
-      const meterStr = site.meterId && site.meterId.trim() !== '' ? site.meterId.trim() : '-';
+      const meterStr = site.meterId && site.meterId.trim() !== '' && site.meterId.trim() !== '-' ? site.meterId.trim() : '';
       const cleanSiteId = site.siteId ? site.siteId.trim().toUpperCase() : '';
       const cleanSiteName = site.siteName ? site.siteName.trim() : '';
 
@@ -46,7 +55,12 @@ export const WhatsAppModal: React.FC<WhatsAppModalProps> = ({
         nameDisplay = cleanSiteId;
       }
 
-      let line = `${icon} ${meterStr} | ${nameDisplay}`;
+      let line = '';
+      if (meterStr) {
+        line = `${icon} ${meterStr} | ${nameDisplay}`;
+      } else {
+        line = `${icon}${nameDisplay}`;
+      }
 
       if (site.tokens && site.tokens.length > 0) {
         const tokensFormatted = site.tokens

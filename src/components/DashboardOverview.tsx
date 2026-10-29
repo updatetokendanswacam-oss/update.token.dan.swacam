@@ -39,8 +39,11 @@ const CategoryCardItem: React.FC<CategoryCardItemProps> = React.memo(({
 
   const isSwacam = category.type === 'swacam';
   const isTokenManual = category.type === 'token_manual';
+  const isNeteco = category.type === 'neteco_unmon' || category.title.toLowerCase().includes('neteco');
   const isCustom = category.type === 'custom';
-  const badgeText = isSwacam
+  const badgeText = isNeteco
+    ? 'LIST NETECO UNMON'
+    : isSwacam
     ? 'SWACAM / CATAT METER'
     : isTokenManual
     ? 'TOKEN LISTRIK MANUAL'
