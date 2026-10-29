@@ -500,8 +500,12 @@ export default function App() {
     }
     setCategories(loadCategories());
     setUsers(loadUsers());
+    
+    // Check for Service Worker / Vercel updates in background
+    checkForAppUpdate(false).catch(() => {});
+
     setIsRefreshing(false);
-    showToast('Data & foto berhasil diperbarui');
+    showToast('Data, foto & koneksi database Firestore berhasil diperbarui.');
   };
 
   // Find currently open category (memoized)
