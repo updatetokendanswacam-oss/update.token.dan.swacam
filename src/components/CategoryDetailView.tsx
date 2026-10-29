@@ -193,7 +193,7 @@ const SiteItemCard: React.FC<SiteItemCardProps> = React.memo(({
               <div className="mt-2.5 pt-2 border-t border-slate-100">
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-[11px] font-semibold text-slate-400">
-                    Dokumentasi KWh Meter ({site.photos?.length || 0} foto):
+                    Dokumentasi Foto ({site.photos?.length || 0} foto):
                   </span>
                   <button
                     type="button"
@@ -201,7 +201,7 @@ const SiteItemCard: React.FC<SiteItemCardProps> = React.memo(({
                     className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-semibold transition cursor-pointer"
                   >
                     <Camera className="w-3.5 h-3.5" />
-                    <span>Foto KWh</span>
+                    <span>Foto</span>
                   </button>
                 </div>
 

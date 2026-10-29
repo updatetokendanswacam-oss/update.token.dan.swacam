@@ -170,7 +170,7 @@ export const CameraModal: React.FC<CameraModalProps> = ({
             </div>
             <h3 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
               <Camera className="w-5 h-5 text-blue-400" />
-              <span>Dokumentasi Foto KWh Meter</span>
+              <span>Dokumentasi Foto</span>
             </h3>
             <p className="text-xs text-yellow-300 font-mono mt-0.5 truncate max-w-xs">
               {site.siteId} - {site.siteName}
@@ -292,7 +292,7 @@ export const CameraModal: React.FC<CameraModalProps> = ({
                       <span>Buka Kamera</span>
                       <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/30 text-blue-300 font-semibold uppercase">Langsung</span>
                     </p>
-                    <p className="text-xs text-slate-300 mt-1">Akses langsung ke kamera HP untuk jepret foto KWh</p>
+                    <p className="text-xs text-slate-300 mt-1">Akses langsung ke kamera HP untuk jepret foto</p>
                   </div>
                 </button>
 

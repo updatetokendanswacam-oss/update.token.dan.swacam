@@ -379,6 +379,7 @@ export async function saveCategoryToFirestore(category: UpdateCategory): Promise
     title: category.title || '',
     period: category.period || '',
     type: category.type || 'swacam',
+    customTypeName: category.customTypeName || undefined,
     sites: sanitizedSites,
     allowCamera: category.allowCamera ?? true,
     allowTokenInput: category.allowTokenInput ?? false,

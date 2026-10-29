@@ -186,7 +186,7 @@ export const EditCategoryModal: React.FC<EditCategoryModalProps> = ({
                   setType(val);
                   setIsCustomMode(false);
                   if (val === 'token') {
-                    setAllowCamera(category.allowCamera);
+                    setAllowCamera(false);
                     setAllowTokenInput(true);
                   } else if (val === 'token_manual') {
                     setAllowCamera(true);

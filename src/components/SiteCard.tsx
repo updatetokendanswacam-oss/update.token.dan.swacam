@@ -212,13 +212,13 @@ export const SiteCard: React.FC<SiteCardProps> = React.memo(({
             <div className="flex items-center justify-between gap-2 mb-2">
               <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wide flex items-center gap-1.5">
                 <ImageIcon className="w-3.5 h-3.5 text-blue-400" />
-                <span>Dokumentasi Foto KWh Meter / Bukti:</span>
+                <span>Dokumentasi Foto / Bukti:</span>
               </span>
 
               {/* Take Photo Button */}
               <button
                 onClick={() => onOpenCamera(site)}
-                title="Ambil foto atau upload gambar KWh meter"
+                title="Ambil foto atau upload gambar"
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/40 text-blue-300 text-xs font-bold transition cursor-pointer"
               >
                 <Camera className="w-3.5 h-3.5" />
@@ -260,7 +260,7 @@ export const SiteCard: React.FC<SiteCardProps> = React.memo(({
             ) : (
               <div className="flex items-center gap-2 p-2.5 rounded-xl bg-slate-950/50 border border-dashed border-slate-800 text-xs text-slate-400">
                 <Camera className="w-4 h-4 text-slate-400" />
-                <span>Belum ada foto. Ketuk tombol kamera untuk mendokumentasikan catat meter.</span>
+                <span>Belum ada foto. Ketuk tombol kamera untuk mendokumentasikan foto.</span>
               </div>
             )}
           </div>
