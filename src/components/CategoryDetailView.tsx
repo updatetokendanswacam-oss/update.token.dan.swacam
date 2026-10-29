@@ -316,8 +316,18 @@ export const CategoryDetailView: React.FC<CategoryDetailViewProps> = React.memo(
   );
 
   const isSwacam = category.type === 'swacam';
+  const isTokenManual = category.type === 'token_manual';
   const isNeteco = category.type === 'neteco_unmon' || category.title.toLowerCase().includes('neteco');
-  const badgeText = isNeteco ? 'LIST NETECO UNMON' : (isSwacam ? 'SWACAM / CATAT METER' : 'TOKEN LISTRIK');
+  const isCustom = category.type === 'custom';
+  const badgeText = isCustom
+    ? (category.customTypeName ? category.customTypeName.toUpperCase() : 'KATEGORI KUSTOM')
+    : isNeteco
+    ? 'LIST NETECO UNMON'
+    : isSwacam
+    ? 'SWACAM / CATAT METER'
+    : isTokenManual
+    ? 'TOKEN LISTRIK MANUAL'
+    : 'TOKEN LISTRIK';
   const isAdmin = currentUser?.role === 'admin';
 
   // Filtered sites with memoization
