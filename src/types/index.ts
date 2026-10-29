@@ -22,7 +22,7 @@ export interface PhotoRecord {
   timestamp: string; // ISO string
   capturedBy: string;
   capturedById?: string;
-  categoryType?: 'token' | 'swacam' | 'token_manual' | 'neteco_unmon' | 'custom';
+  categoryType?: 'token' | 'swacam' | 'token_manual' | 'neteco_unmon' | 'standby_team' | 'custom';
   categoryTitle?: string;
   brandTitle?: string;
   formattedTime: string;
@@ -33,11 +33,12 @@ export interface PhotoRecord {
 
 export interface SiteItem {
   id: string;
-  meterId: string; // No. ID Pelanggan / Meter
-  siteId: string;  // Site ID (e.g. EPE134, JKT763, JTX376)
-  siteName: string;// Nama Site
+  meterId: string; // No. ID Pelanggan / Meter / No. HP
+  siteId: string;  // Site ID / Kelompok (e.g. JAKTIM 1, JAKTIM 2)
+  siteName: string;// Nama Site / Personel
   checked: boolean;
   checkedBy?: string; // Nama petugas yang menceklis
+  statusColor?: 'off' | 'ijin_sakit' | 'standby'; // 🔴 off | 🟡 ijin/sakit | 🟢 standby
   tokens?: string[]; // No Token Listrik (multiple tokens support)
   photos?: PhotoRecord[];
   updatedAt?: string;
@@ -48,7 +49,7 @@ export interface UpdateCategory {
   id: string;
   title: string;       // e.g. "Pengisian Token Listrik - DEPOTEL"
   period: string;      // e.g. "Bulan September 2026"
-  type: 'token' | 'swacam' | 'token_manual' | 'neteco_unmon' | 'custom';
+  type: 'token' | 'swacam' | 'token_manual' | 'neteco_unmon' | 'standby_team' | 'custom';
   customTypeName?: string; // Tipe atau nama kategori kustom yang diketik pengguna
   sites: SiteItem[];
   allowCamera: boolean;

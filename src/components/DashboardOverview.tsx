@@ -40,9 +40,12 @@ const CategoryCardItem: React.FC<CategoryCardItemProps> = React.memo(({
   const isSwacam = category.type === 'swacam';
   const isTokenManual = category.type === 'token_manual';
   const isNeteco = category.type === 'neteco_unmon' || category.title.toLowerCase().includes('neteco');
+  const isStandbyTeam = category.type === 'standby_team' || category.title.toLowerCase().includes('standby') || category.title.toLowerCase().includes('jadwal');
   const isCustom = category.type === 'custom';
   const badgeText = category.customTypeName
     ? category.customTypeName.toUpperCase()
+    : isStandbyTeam
+    ? 'JADWAL STANDBY TEAM MBP'
     : isNeteco
     ? 'LIST NETECO UNMON'
     : isSwacam

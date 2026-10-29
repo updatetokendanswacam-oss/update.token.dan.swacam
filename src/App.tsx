@@ -763,6 +763,65 @@ export default function App() {
     });
   }, [currentUser?.name]);
 
+  // Status color update (🔴 off, 🟡 ijin/sakit, 🟢 standby) for site items
+  const handleUpdateSiteStatusColor = useCallback((siteId: string, newStatusColor: 'off' | 'ijin_sakit' | 'standby') => {
+    setCategories((prevCategories) => {
+      const refSite = findSiteGlobally(siteId, prevCategories);
+      if (!refSite) return prevCategories;
+
+      const newCheckedStatus = newStatusColor === 'standby';
+      const userName = currentUser?.name || 'Petugas';
+      const nowIso = new Date().toISOString();
+
+      const affectedCatIds = new Set<string>();
+
+      const updated = prevCategories.map((cat) => {
+        let modified = false;
+        const sites = cat.sites.map((site) => {
+          if (site.id === siteId) {
+            modified = true;
+            let updatedName = site.siteName;
+            const emojiMap = { off: '🔴', ijin_sakit: '🟡', standby: '🟢' };
+            const newEmoji = emojiMap[newStatusColor];
+            if (/^[🔴🟡🟢]/.test(updatedName)) {
+              updatedName = updatedName.replace(/^[🔴🟡🟢]/, newEmoji);
+            }
+
+            return {
+              ...site,
+              statusColor: newStatusColor,
+              checked: newCheckedStatus,
+              checkedBy: newCheckedStatus ? userName : '',
+              siteName: updatedName,
+              updatedAt: nowIso,
+              updatedBy: userName,
+            };
+          }
+          return site;
+        });
+
+        if (modified) {
+          affectedCatIds.add(cat.id);
+        }
+
+        return { ...cat, sites };
+      });
+
+      saveCategories(updated);
+
+      setTimeout(() => {
+        const affectedCategories = updated.filter((c) => affectedCatIds.has(c.id));
+        for (const cat of affectedCategories) {
+          saveCategoryToFirestore(cat).catch((err) =>
+            console.warn('Firestore status color update notice:', err)
+          );
+        }
+      }, 0);
+
+      return updated;
+    });
+  }, [currentUser?.name]);
+
   // Token Management (Memperbarui nomor token tanpa mengubah status centang secara otomatis)
   const handleAddToken = useCallback((siteId: string, token: string) => {
     setCategories((prevCategories) => {
@@ -1670,6 +1729,7 @@ export default function App() {
                     setCameraCategory(currentCategory);
                   }}
                   onViewPhoto={(s, idx) => setViewingPhoto({ site: s, index: idx })}
+                  onUpdateStatusColor={handleUpdateSiteStatusColor}
                 />
               ) : null
             ) : (

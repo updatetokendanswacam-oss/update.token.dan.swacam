@@ -23,9 +23,51 @@ export const WhatsAppModal: React.FC<WhatsAppModalProps> = ({
 
   const buildWhatsAppText = () => {
     const isNeteco = category.type === 'neteco_unmon' || category.title.toLowerCase().includes('neteco');
+    const isStandby = category.type === 'standby_team' || category.title.toLowerCase().includes('standby') || category.title.toLowerCase().includes('jadwal');
 
     const titleLine = category.title ? category.title.trim() : 'Update List – DEPOTEL';
     const periodLine = category.period ? category.period.trim() : 'Bulan Oktober 2026';
+
+    if (isStandby) {
+      // Group by siteId (e.g. JAKTIM 1, JAKTIM 2)
+      const groups: { [key: string]: typeof category.sites } = {};
+      category.sites.forEach((site) => {
+        const groupKey = site.siteId || 'JAKTIM 1';
+        if (!groups[groupKey]) groups[groupKey] = [];
+        groups[groupKey].push(site);
+      });
+
+      let text = `${titleLine}\n______________________\n\n*NOP SOUTHERN* \n\n`;
+
+      Object.keys(groups).forEach((groupKey) => {
+        text += `TO ${groupKey.toUpperCase()} :\n\n`;
+        groups[groupKey].forEach((site, index) => {
+          let colorIcon = '🟢';
+          if (site.statusColor === 'off') {
+            colorIcon = '🔴';
+          } else if (site.statusColor === 'ijin_sakit') {
+            colorIcon = '🟡';
+          } else if (site.statusColor === 'standby') {
+            colorIcon = '🟢';
+          } else if (!site.checked) {
+            colorIcon = '🔴';
+          }
+
+          // Clean site name from leading color emojis if present
+          const cleanName = site.siteName
+            .replace(/^[🔴🟡🟢]\s*/, '')
+            .replace(/☆.*$/, '')
+            .trim();
+
+          const phone = site.meterId || '';
+          text += `${index + 1}. ${colorIcon}${cleanName}☆${phone}\n`;
+        });
+        text += '\n';
+      });
+
+      text += `_______________________\n\nKeterangan :\n🔴 : off\n🟡 : ijin/sakit\n🟢 : standby`;
+      return text;
+    }
 
     let header = '';
     if (isNeteco) {

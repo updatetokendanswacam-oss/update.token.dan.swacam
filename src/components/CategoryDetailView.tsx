@@ -30,6 +30,7 @@ interface SiteItemCardProps {
   onRemoveToken: (siteId: string, tokenIndex: number) => void;
   onOpenCamera: (site: SiteItem) => void;
   onViewPhoto: (site: SiteItem, photoIndex: number) => void;
+  onUpdateStatusColor?: (siteId: string, statusColor: 'off' | 'ijin_sakit' | 'standby') => void;
 }
 
 const SiteItemCard: React.FC<SiteItemCardProps> = React.memo(({
@@ -44,6 +45,7 @@ const SiteItemCard: React.FC<SiteItemCardProps> = React.memo(({
   onRemoveToken,
   onOpenCamera,
   onViewPhoto,
+  onUpdateStatusColor,
 }) => {
   const [isInputOpen, setIsInputOpen] = useState(false);
   const [tokenInputText, setTokenInputText] = useState('');
@@ -106,6 +108,49 @@ const SiteItemCard: React.FC<SiteItemCardProps> = React.memo(({
             <p className="mt-1 text-xs sm:text-sm font-semibold text-slate-700 break-words leading-snug">
               {site.siteName}
             </p>
+
+            {/* Status Color Selector Buttons */}
+            <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+              <button
+                type="button"
+                onClick={() => onUpdateStatusColor?.(site.id, 'off')}
+                title="Tandai Status OFF (🔴)"
+                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1 ${
+                  site.statusColor === 'off' || (!site.checked && site.statusColor !== 'ijin_sakit')
+                    ? 'bg-rose-100 text-rose-700 border border-rose-300 ring-2 ring-rose-400/40'
+                    : 'bg-slate-100 text-slate-600 hover:bg-rose-50 border border-slate-200'
+                }`}
+              >
+                <span>🔴</span>
+                <span>off</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => onUpdateStatusColor?.(site.id, 'ijin_sakit')}
+                title="Tandai Status Ijin / Sakit (🟡)"
+                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1 ${
+                  site.statusColor === 'ijin_sakit'
+                    ? 'bg-amber-100 text-amber-800 border border-amber-300 ring-2 ring-amber-400/40'
+                    : 'bg-slate-100 text-slate-600 hover:bg-amber-50 border border-slate-200'
+                }`}
+              >
+                <span>🟡</span>
+                <span>ijin/sakit</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => onUpdateStatusColor?.(site.id, 'standby')}
+                title="Tandai Status Standby (🟢)"
+                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1 ${
+                  site.statusColor === 'standby' || site.checked
+                    ? 'bg-emerald-100 text-emerald-800 border border-emerald-300 ring-2 ring-emerald-400/40'
+                    : 'bg-slate-100 text-slate-600 hover:bg-emerald-50 border border-slate-200'
+                }`}
+              >
+                <span>🟢</span>
+                <span>standby</span>
+              </button>
+            </div>
 
             {/* Token display / Tambah catatan area */}
             {!isSwacam && (
@@ -283,6 +328,7 @@ interface CategoryDetailViewProps {
   onRemoveToken: (siteId: string, tokenIndex: number) => void;
   onOpenCamera: (site: SiteItem) => void;
   onViewPhoto: (site: SiteItem, photoIndex: number) => void;
+  onUpdateStatusColor?: (siteId: string, statusColor: 'off' | 'ijin_sakit' | 'standby') => void;
 }
 
 export const CategoryDetailView: React.FC<CategoryDetailViewProps> = React.memo(({
@@ -299,6 +345,7 @@ export const CategoryDetailView: React.FC<CategoryDetailViewProps> = React.memo(
   onRemoveToken,
   onOpenCamera,
   onViewPhoto,
+  onUpdateStatusColor,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'unchecked' | 'checked'>('all');
@@ -318,9 +365,12 @@ export const CategoryDetailView: React.FC<CategoryDetailViewProps> = React.memo(
   const isSwacam = category.type === 'swacam';
   const isTokenManual = category.type === 'token_manual';
   const isNeteco = category.type === 'neteco_unmon' || category.title.toLowerCase().includes('neteco');
+  const isStandbyTeam = category.type === 'standby_team' || category.title.toLowerCase().includes('standby') || category.title.toLowerCase().includes('jadwal');
   const isCustom = category.type === 'custom';
   const badgeText = category.customTypeName
     ? category.customTypeName.toUpperCase()
+    : isStandbyTeam
+    ? 'JADWAL STANDBY TEAM MBP'
     : isNeteco
     ? 'LIST NETECO UNMON'
     : isSwacam
@@ -396,6 +446,18 @@ export const CategoryDetailView: React.FC<CategoryDetailViewProps> = React.memo(
           {category.title}
         </h1>
         <p className="text-sm text-slate-500 font-medium">{category.period}</p>
+
+        {/* Legend banner for Standby Team */}
+        {isStandbyTeam && (
+          <div className="mt-3 p-3.5 rounded-2xl bg-white border border-slate-200 shadow-2xs flex flex-wrap items-center justify-between gap-2.5 text-xs">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-bold text-slate-800 uppercase tracking-wider text-[11px]">Keterangan Status:</span>
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-rose-50 text-rose-700 border border-rose-200 font-bold">🔴 off</span>
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-50 text-amber-800 border border-amber-200 font-bold">🟡 ijin/sakit</span>
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200 font-bold">🟢 standby</span>
+            </div>
+          </div>
+        )}
 
         {/* Action Buttons: Kirim WhatsApp (Semua), Edit judul (Admin), + Tambah site (Admin) */}
         <div className="flex flex-wrap items-center gap-2.5 pt-2">
@@ -558,6 +620,7 @@ export const CategoryDetailView: React.FC<CategoryDetailViewProps> = React.memo(
                 onRemoveToken={onRemoveToken}
                 onOpenCamera={onOpenCamera}
                 onViewPhoto={onViewPhoto}
+                onUpdateStatusColor={onUpdateStatusColor}
               />
             ))}
 

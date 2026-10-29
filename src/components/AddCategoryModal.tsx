@@ -16,12 +16,12 @@ export const AddCategoryModal: React.FC<AddCategoryModalProps> = ({
 }) => {
   const [title, setTitle] = useState('');
   const [period, setPeriod] = useState('Bulan November 2026');
-  const [type, setType] = useState<'token' | 'swacam' | 'token_manual' | 'neteco_unmon' | 'custom'>('token');
+  const [type, setType] = useState<'token' | 'swacam' | 'token_manual' | 'neteco_unmon' | 'standby_team' | 'custom'>('token');
   const [isCustomMode, setIsCustomMode] = useState(false);
   const [customTypeName, setCustomTypeName] = useState('');
   const [allowCamera, setAllowCamera] = useState(false);
   const [allowTokenInput, setAllowTokenInput] = useState(true);
-  const [templateSource, setTemplateSource] = useState<'token_31' | 'swacam_22' | 'manual_6' | 'neteco_48'>('token_31');
+  const [templateSource, setTemplateSource] = useState<'token_31' | 'swacam_22' | 'manual_6' | 'neteco_48' | 'standby_team_6'>('token_31');
   const [errorMessage, setErrorMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -45,6 +45,8 @@ export const AddCategoryModal: React.FC<AddCategoryModalProps> = ({
       sourceCategory = existingCategories.find((c) => c.type === 'token_manual') || INITIAL_CATEGORIES.find((c) => c.type === 'token_manual');
     } else if (templateSource === 'neteco_48') {
       sourceCategory = existingCategories.find((c) => c.type === 'neteco_unmon') || INITIAL_CATEGORIES.find((c) => c.type === 'neteco_unmon');
+    } else if (templateSource === 'standby_team_6') {
+      sourceCategory = existingCategories.find((c) => c.type === 'standby_team') || INITIAL_CATEGORIES.find((c) => c.type === 'standby_team');
     } else {
       sourceCategory = existingCategories.find((c) => c.type === 'token') || INITIAL_CATEGORIES.find((c) => c.type === 'token');
     }
@@ -62,8 +64,9 @@ export const AddCategoryModal: React.FC<AddCategoryModalProps> = ({
         meterId: s.meterId || '',
         siteId: s.siteId || '',
         siteName: s.siteName || '',
-        checked: false,
-        checkedBy: '',
+        checked: s.checked ?? false,
+        checkedBy: s.checkedBy || '',
+        statusColor: s.statusColor,
         tokens: [],
         photos: [],
         updatedAt: new Date().toISOString(),
@@ -78,7 +81,7 @@ export const AddCategoryModal: React.FC<AddCategoryModalProps> = ({
       type: resolvedType,
       customTypeName: isCustomMode && customTypeName.trim() ? customTypeName.trim() : undefined,
       sites: initialSites,
-      allowCamera: resolvedType === 'custom' ? allowCamera : (resolvedType === 'swacam' || resolvedType === 'token_manual' || resolvedType === 'neteco_unmon'),
+      allowCamera: resolvedType === 'custom' ? allowCamera : (resolvedType === 'swacam' || resolvedType === 'token_manual' || resolvedType === 'neteco_unmon' || resolvedType === 'standby_team'),
       allowTokenInput: resolvedType === 'custom' ? allowTokenInput : (resolvedType === 'token' || resolvedType === 'token_manual'),
     };
 
@@ -166,6 +169,7 @@ export const AddCategoryModal: React.FC<AddCategoryModalProps> = ({
               <option value="swacam_22">Update Swacam / Catat Meter – DEPOTEL (22 Site)</option>
               <option value="manual_6">Pengisian Token Listrik Manual – DEPOTEL (6 Site)</option>
               <option value="neteco_48">List NETECO UNMON Eastern JABO (48 Site)</option>
+              <option value="standby_team_6">JADWAL STANDBY TEAM MBP *DEPOTEL* INNER JAKTIM 29-10-2026 (6 Personel)</option>
             </select>
           </div>
 
@@ -268,6 +272,10 @@ export const AddCategoryModal: React.FC<AddCategoryModalProps> = ({
                       setAllowCamera(true);
                       setAllowTokenInput(false);
                       setTemplateSource('neteco_48');
+                    } else if (val === 'standby_team') {
+                      setAllowCamera(true);
+                      setAllowTokenInput(false);
+                      setTemplateSource('standby_team_6');
                     }
                   }}
                   className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm text-slate-900 focus:outline-none focus:border-blue-600 transition bg-white"
@@ -276,6 +284,7 @@ export const AddCategoryModal: React.FC<AddCategoryModalProps> = ({
                   <option value="token_manual">+ Token Listrik Manual (No. Token & Kamera Dokumentasi)</option>
                   <option value="swacam">+ Swacam / Catat Meter (Kamera KWh Meter)</option>
                   <option value="neteco_unmon">+ List NETECO UNMON Eastern JABO (48 Site)</option>
+                  <option value="standby_team">+ Jadwal Standby Team MBP (Jadwal & Petugas Standby)</option>
                   <option value="custom">+ Ketik / Tambah Kategori Lain...</option>
                 </select>
               </div>

@@ -360,6 +360,22 @@ export const INITIAL_CATEGORIES: UpdateCategory[] = [
       { id: 'n47', meterId: '', siteId: 'JSX082', siteName: 'JSX082-RanchoIndahTBG-MACRO (butuh Kabel Panjang)', checked: true, checkedBy: 'Petugas', tokens: [] },
       { id: 'n48', meterId: '', siteId: 'JKT002', siteName: 'JKT002 CPNGTIMUR Tgl.18/2/26.Dikki', checked: true, checkedBy: 'Dikki', tokens: [] },
     ]
+  },
+  {
+    id: 'cat-standby-team-jaktim',
+    title: 'JADWAL STANDBY TEAM MBP *DEPOTEL* INNER JAKTIM 29-10-2026',
+    period: '29-10-2026',
+    type: 'standby_team',
+    allowCamera: true,
+    allowTokenInput: false,
+    sites: [
+      { id: 'st1', meterId: '0813996457698', siteId: 'JAKTIM 1', siteName: '🔴 DIKI SOLIHIN ☆ 0813996457698', checked: false, statusColor: 'off', tokens: [] },
+      { id: 'st2', meterId: '082258728570', siteId: 'JAKTIM 1', siteName: '🟢 SADDAMHUSEN ☆ 082258728570', checked: true, checkedBy: 'SADDAMHUSEN', statusColor: 'standby', tokens: [] },
+      { id: 'st3', meterId: '085715645590', siteId: 'JAKTIM 1', siteName: '🟢 KUSNAEDI ☆ 085715645590', checked: true, checkedBy: 'KUSNAEDI', statusColor: 'standby', tokens: [] },
+      { id: 'st4', meterId: '081298902927', siteId: 'JAKTIM 2', siteName: '🔴 AGUSTIAN ☆ 081298902927', checked: false, statusColor: 'off', tokens: [] },
+      { id: 'st5', meterId: '081381227922', siteId: 'JAKTIM 2', siteName: '🟢 BUDIMAN ☆ 081381227922', checked: true, checkedBy: 'BUDIMAN', statusColor: 'standby', tokens: [] },
+      { id: 'st6', meterId: '082111108875', siteId: 'JAKTIM 2', siteName: '🟢 MUSLIM ☆ 082111108875', checked: true, checkedBy: 'MUSLIM', statusColor: 'standby', tokens: [] },
+    ]
   }
 ];
 
