@@ -22,6 +22,7 @@ interface SiteItemCardProps {
   site: SiteItem;
   isAdmin: boolean;
   isSwacam: boolean;
+  isStandbyTeam?: boolean;
   showCamera: boolean;
   onToggleCheck: (siteId: string) => void;
   onEditSite: (site: SiteItem) => void;
@@ -37,6 +38,7 @@ const SiteItemCard: React.FC<SiteItemCardProps> = React.memo(({
   site,
   isAdmin,
   isSwacam,
+  isStandbyTeam,
   showCamera,
   onToggleCheck,
   onEditSite,
@@ -109,48 +111,50 @@ const SiteItemCard: React.FC<SiteItemCardProps> = React.memo(({
               {site.siteName}
             </p>
 
-            {/* Status Color Selector Buttons */}
-            <div className="flex items-center gap-1.5 mt-2 flex-wrap">
-              <button
-                type="button"
-                onClick={() => onUpdateStatusColor?.(site.id, 'off')}
-                title="Tandai Status OFF (🔴)"
-                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1 ${
-                  site.statusColor === 'off' || (!site.checked && site.statusColor !== 'ijin_sakit')
-                    ? 'bg-rose-100 text-rose-700 border border-rose-300 ring-2 ring-rose-400/40'
-                    : 'bg-slate-100 text-slate-600 hover:bg-rose-50 border border-slate-200'
-                }`}
-              >
-                <span>🔴</span>
-                <span>off</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => onUpdateStatusColor?.(site.id, 'ijin_sakit')}
-                title="Tandai Status Ijin / Sakit (🟡)"
-                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1 ${
-                  site.statusColor === 'ijin_sakit'
-                    ? 'bg-amber-100 text-amber-800 border border-amber-300 ring-2 ring-amber-400/40'
-                    : 'bg-slate-100 text-slate-600 hover:bg-amber-50 border border-slate-200'
-                }`}
-              >
-                <span>🟡</span>
-                <span>ijin/sakit</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => onUpdateStatusColor?.(site.id, 'standby')}
-                title="Tandai Status Standby (🟢)"
-                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1 ${
-                  site.statusColor === 'standby' || site.checked
-                    ? 'bg-emerald-100 text-emerald-800 border border-emerald-300 ring-2 ring-emerald-400/40'
-                    : 'bg-slate-100 text-slate-600 hover:bg-emerald-50 border border-slate-200'
-                }`}
-              >
-                <span>🟢</span>
-                <span>standby</span>
-              </button>
-            </div>
+            {/* Status Color Selector Buttons (Hanya untuk Standby Team) */}
+            {isStandbyTeam && (
+              <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => onUpdateStatusColor?.(site.id, 'off')}
+                  title="Tandai Status OFF (🔴)"
+                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1 ${
+                    site.statusColor === 'off' || (!site.checked && site.statusColor !== 'ijin_sakit')
+                      ? 'bg-rose-100 text-rose-700 border border-rose-300 ring-2 ring-rose-400/40'
+                      : 'bg-slate-100 text-slate-600 hover:bg-rose-50 border border-slate-200'
+                  }`}
+                >
+                  <span>🔴</span>
+                  <span>off</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onUpdateStatusColor?.(site.id, 'ijin_sakit')}
+                  title="Tandai Status Ijin / Sakit (🟡)"
+                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1 ${
+                    site.statusColor === 'ijin_sakit'
+                      ? 'bg-amber-100 text-amber-800 border border-amber-300 ring-2 ring-amber-400/40'
+                      : 'bg-slate-100 text-slate-600 hover:bg-amber-50 border border-slate-200'
+                  }`}
+                >
+                  <span>🟡</span>
+                  <span>ijin/sakit</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onUpdateStatusColor?.(site.id, 'standby')}
+                  title="Tandai Status Standby (🟢)"
+                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1 ${
+                    site.statusColor === 'standby' || site.checked
+                      ? 'bg-emerald-100 text-emerald-800 border border-emerald-300 ring-2 ring-emerald-400/40'
+                      : 'bg-slate-100 text-slate-600 hover:bg-emerald-50 border border-slate-200'
+                  }`}
+                >
+                  <span>🟢</span>
+                  <span>standby</span>
+                </button>
+              </div>
+            )}
 
             {/* Token display / Tambah catatan area */}
             {!isSwacam && (
@@ -612,6 +616,7 @@ export const CategoryDetailView: React.FC<CategoryDetailViewProps> = React.memo(
                 site={site}
                 isAdmin={isAdmin}
                 isSwacam={isSwacam}
+                isStandbyTeam={isStandbyTeam}
                 showCamera={category.allowCamera}
                 onToggleCheck={onToggleCheck}
                 onEditSite={onEditSite}
