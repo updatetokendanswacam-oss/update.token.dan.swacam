@@ -41,14 +41,16 @@ const CategoryCardItem: React.FC<CategoryCardItemProps> = React.memo(({
   const isTokenManual = category.type === 'token_manual';
   const isNeteco = category.type === 'neteco_unmon' || category.title.toLowerCase().includes('neteco');
   const isCustom = category.type === 'custom';
-  const badgeText = isNeteco
+  const badgeText = category.customTypeName
+    ? category.customTypeName.toUpperCase()
+    : isNeteco
     ? 'LIST NETECO UNMON'
     : isSwacam
     ? 'SWACAM / CATAT METER'
     : isTokenManual
     ? 'TOKEN LISTRIK MANUAL'
     : isCustom
-    ? (category.customTypeName ? `+ ${category.customTypeName.toUpperCase()}` : '+ KATEGORI KUSTOM')
+    ? 'KATEGORI KUSTOM'
     : 'TOKEN LISTRIK';
 
   const handleStartEditCount = (e: React.MouseEvent) => {

@@ -319,14 +319,16 @@ export const CategoryDetailView: React.FC<CategoryDetailViewProps> = React.memo(
   const isTokenManual = category.type === 'token_manual';
   const isNeteco = category.type === 'neteco_unmon' || category.title.toLowerCase().includes('neteco');
   const isCustom = category.type === 'custom';
-  const badgeText = isCustom
-    ? (category.customTypeName ? category.customTypeName.toUpperCase() : 'KATEGORI KUSTOM')
+  const badgeText = category.customTypeName
+    ? category.customTypeName.toUpperCase()
     : isNeteco
     ? 'LIST NETECO UNMON'
     : isSwacam
     ? 'SWACAM / CATAT METER'
     : isTokenManual
     ? 'TOKEN LISTRIK MANUAL'
+    : isCustom
+    ? 'KATEGORI KUSTOM'
     : 'TOKEN LISTRIK';
   const isAdmin = currentUser?.role === 'admin';
 
