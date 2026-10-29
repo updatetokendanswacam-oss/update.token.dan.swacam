@@ -63,6 +63,7 @@ const UserManagementModal = React.lazy(() => import('./components/UserManagement
 const AccountSettingsModal = React.lazy(() => import('./components/AccountSettingsModal').then((m) => ({ default: m.AccountSettingsModal })));
 const InviteModal = React.lazy(() => import('./components/InviteModal').then((m) => ({ default: m.InviteModal })));
 const ConfirmDeleteModal = React.lazy(() => import('./components/ConfirmDeleteModal').then((m) => ({ default: m.ConfirmDeleteModal })));
+const EditCategoryModal = React.lazy(() => import('./components/EditCategoryModal').then((m) => ({ default: m.EditCategoryModal })));
 const GoogleDriveModal = React.lazy(() => import('./components/GoogleDriveModal').then((m) => ({ default: m.GoogleDriveModal })));
 
 export default function App() {
@@ -1154,12 +1155,24 @@ export default function App() {
   }, [categories, selectedCategoryId, showToast]);
 
   const handleEditCategory = useCallback((cat: UpdateCategory) => {
-    if (currentUser?.role !== 'admin') {
-      showToast('Akses ditolak: Hanya Administrator yang berwenang mengubah kategori.');
-      return;
-    }
     setEditingCategory(cat);
-  }, [currentUser?.role, showToast]);
+  }, []);
+
+  const handleSaveEditedCategory = useCallback(async (updatedCategory: UpdateCategory) => {
+    try {
+      await saveCategoryToFirestore(updatedCategory);
+      setCategories((prev) => {
+        const updated = prev.map((cat) => (cat.id === updatedCategory.id ? updatedCategory : cat));
+        saveCategories(updated);
+        return updated;
+      });
+      setEditingCategory(null);
+      showToast(`Judul & periode "${updatedCategory.title}" berhasil diperbarui di database`);
+    } catch (err: any) {
+      console.error('Error saving edited category to Firestore:', err);
+      showToast(`Gagal menyimpan perubahan kategori: ${err?.message || err}`);
+    }
+  }, [showToast]);
 
   const handleUpdateSiteCount = useCallback(async (categoryId: string, newTotal: number) => {
     if (currentUser?.role !== 'admin') {
@@ -1838,6 +1851,14 @@ export default function App() {
             <InviteModal
               onClose={() => setShowInviteModal(false)}
               onCreateInvite={handleCreateInvite}
+            />
+          )}
+
+          {editingCategory && (
+            <EditCategoryModal
+              category={editingCategory}
+              onClose={() => setEditingCategory(null)}
+              onSaveCategory={handleSaveEditedCategory}
             />
           )}
 

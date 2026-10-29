@@ -76,25 +76,23 @@ const CategoryCardItem: React.FC<CategoryCardItemProps> = React.memo(({
         </span>
 
         <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+          <button
+            type="button"
+            onClick={() => onEditCategory(category)}
+            title="Edit Kategori & Periode"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition cursor-pointer"
+          >
+            <Edit2 className="w-4 h-4" />
+          </button>
           {isAdmin && (
-            <>
-              <button
-                type="button"
-                onClick={() => onEditCategory(category)}
-                title="Edit Kategori & Periode"
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition cursor-pointer"
-              >
-                <Edit2 className="w-4 h-4" />
-              </button>
-              <button
-                type="button"
-                onClick={() => onDeleteCategory(category.id)}
-                title="Hapus Kategori ini"
-                className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition cursor-pointer"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
-            </>
+            <button
+              type="button"
+              onClick={() => onDeleteCategory(category.id)}
+              title="Hapus Kategori ini"
+              className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition cursor-pointer"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
           )}
           <button
             type="button"
