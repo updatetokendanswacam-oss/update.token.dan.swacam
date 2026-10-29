@@ -73,6 +73,9 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(() => loadSession());
   const [invites, setInvites] = useState<InviteLink[]>(() => loadInvites());
 
+  // Ref to track deleted category IDs and prevent snapshot listener from restoring them
+  const deletedCategoryIdsRef = React.useRef<Set<string>>(new Set());
+
   // Navigation tab: 'dashboard' (Beranda) | 'settings' (Pengaturan)
   const [activeNav, setActiveNav] = useState<'dashboard' | 'settings'>('dashboard');
   const [isOpenMobileSidebar, setIsOpenMobileSidebar] = useState(false);
@@ -300,6 +303,9 @@ export default function App() {
 
           // Retain any newly added local categories not yet returned by remoteCats snapshot
           for (const localCat of prevCategories) {
+            if (deletedCategoryIdsRef.current.has(localCat.id)) {
+              continue; // Do not restore categories deleted by the user
+            }
             if (!merged.some((c) => c.id === localCat.id)) {
               merged.push(localCat);
             }
@@ -1166,43 +1172,48 @@ export default function App() {
   }, []);
 
   const handleSaveEditedCategory = useCallback(async (updatedCategory: UpdateCategory) => {
+    // 1. Optimistic update: Update React state & localStorage instantly
+    setCategories((prev) => {
+      const updated = prev.map((cat) => (cat.id === updatedCategory.id ? updatedCategory : cat));
+      saveCategories(updated);
+      return updated;
+    });
+    setEditingCategory(null);
+    showToast(`Judul & periode "${updatedCategory.title}" berhasil diperbarui`);
+
+    // 2. Persist edit to Firestore in background
     try {
       await saveCategoryToFirestore(updatedCategory);
-      setCategories((prev) => {
-        const updated = prev.map((cat) => (cat.id === updatedCategory.id ? updatedCategory : cat));
-        saveCategories(updated);
-        return updated;
-      });
-      setEditingCategory(null);
-      showToast(`Judul & periode "${updatedCategory.title}" berhasil diperbarui di database`);
     } catch (err: any) {
       console.error('Error saving edited category to Firestore:', err);
-      showToast(`Gagal menyimpan perubahan kategori: ${err?.message || err}`);
+      showToast(`Gagal menyelaraskan perubahan ke database cloud: ${err?.message || err}`);
     }
   }, [showToast]);
 
   const handleAddCategory = useCallback(async (newCat: UpdateCategory) => {
+    // Clear from deleted set if re-created
+    deletedCategoryIdsRef.current.delete(newCat.id);
+
+    // 1. Update local React state & localStorage instantly
+    setCategories((prev) => {
+      const exists = prev.some((c) => c.id === newCat.id);
+      const updated = exists ? prev.map((c) => (c.id === newCat.id ? newCat : c)) : [...prev, newCat];
+      saveCategories(updated);
+      return updated;
+    });
+
+    // 2. Immediately select new category & open detail view so list appears instantly
+    setSelectedCategoryId(newCat.id);
+    setViewMode('detail');
+    setShowAddCategoryModal(false);
+    showToast(`Periode baru "${newCat.title}" (${newCat.sites.length} site) berhasil dibuat`);
+
+    // 3. Save new category to Firestore in background
     try {
-      // 1. Save new category directly to Firestore
       await saveCategoryToFirestore(newCat);
-
-      // 2. Update local React state & localStorage
-      setCategories((prev) => {
-        const exists = prev.some((c) => c.id === newCat.id);
-        const updated = exists ? prev.map((c) => (c.id === newCat.id ? newCat : c)) : [...prev, newCat];
-        saveCategories(updated);
-        return updated;
-      });
-
-      // 3. Immediately select new category & open detail view so list appears instantly
-      setSelectedCategoryId(newCat.id);
-      setViewMode('detail');
-      setShowAddCategoryModal(false);
-      showToast(`Periode baru "${newCat.title}" (${newCat.sites.length} site) berhasil dibuat`);
     } catch (err: any) {
       console.error('Error creating new category in Firestore:', err);
-      showToast(`Gagal membuat periode baru di database: ${err?.message || err}`);
-      throw err;
+      showToast(`Gagal menyelaraskan periode baru ke database cloud: ${err?.message || err}`);
     }
   }, [showToast]);
 
@@ -1289,46 +1300,50 @@ export default function App() {
         };
       });
 
+      // 1. Optimistic update: Update React state & localStorage instantly
+      setCategories(updatedCategories);
+      saveCategories(updatedCategories);
+      setDeleteModalState(null);
+      showToast(`Site ${siteName} berhasil dihapus dari list`);
+
+      // 2. Save deletion permanently to Firestore in background
       const affectedCategories = updatedCategories.filter(
         (c) => !targetCatId || c.id === targetCatId
       );
 
       try {
-        // Save deletion permanently to Firestore BEFORE updating UI state
         for (const cat of affectedCategories) {
           await saveCategoryToFirestore(cat);
         }
-
-        // Now commit update to React state & localStorage permanently
-        setCategories(updatedCategories);
-        saveCategories(updatedCategories);
-        showToast(`Site ${siteName} berhasil dihapus permanen dari database`);
       } catch (err: any) {
         console.error('Error deleting site from Firestore:', err);
-        showToast(`Gagal menghapus site dari database: ${err?.message || err}`);
+        showToast(`Gagal menyelaraskan penghapusan site ke cloud: ${err?.message || err}`);
       }
     } else if (deleteModalState.type === 'category' && deleteModalState.category) {
       const catId = deleteModalState.category.id;
       const catTitle = deleteModalState.category.title;
 
-      try {
-        // Save category deletion permanently to Firestore BEFORE updating UI state
-        await deleteCategoryFromFirestore(catId);
+      // 1. Track deleted category ID so snapshot listener never restores it
+      deletedCategoryIdsRef.current.add(catId);
 
-        const remainingCategories = categories.filter((c) => c.id !== catId);
-        if (selectedCategoryId === catId && remainingCategories.length > 0) {
-          setSelectedCategoryId(remainingCategories[0].id);
-        }
-        setCategories(remainingCategories);
-        saveCategories(remainingCategories);
-        showToast(`Kategori "${catTitle}" berhasil dihapus permanen dari database`);
+      // 2. Optimistic update: Update React state & localStorage instantly
+      const remainingCategories = categories.filter((c) => c.id !== catId);
+      if (selectedCategoryId === catId && remainingCategories.length > 0) {
+        setSelectedCategoryId(remainingCategories[0].id);
+      }
+      setCategories(remainingCategories);
+      saveCategories(remainingCategories);
+      setDeleteModalState(null);
+      showToast(`Kategori "${catTitle}" berhasil dihapus dari list`);
+
+      // 3. Save category deletion permanently to Firestore in background
+      try {
+        await deleteCategoryFromFirestore(catId);
       } catch (err: any) {
         console.error('Error deleting category from Firestore:', err);
-        showToast(`Gagal menghapus kategori dari database: ${err?.message || err}`);
+        showToast(`Gagal menghapus kategori dari cloud: ${err?.message || err}`);
       }
     }
-
-    setDeleteModalState(null);
   }, [deleteModalState, selectedCategoryId, categories, showToast]);
 
   // User Management with Firestore Persistence and Server-side authorization check

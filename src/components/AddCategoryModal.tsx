@@ -21,6 +21,7 @@ export const AddCategoryModal: React.FC<AddCategoryModalProps> = ({
   const [customTypeName, setCustomTypeName] = useState('');
   const [allowCamera, setAllowCamera] = useState(false);
   const [allowTokenInput, setAllowTokenInput] = useState(true);
+  const [templateSource, setTemplateSource] = useState<'token_31' | 'swacam_22' | 'manual_6'>('token_31');
   const [errorMessage, setErrorMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -35,10 +36,24 @@ export const AddCategoryModal: React.FC<AddCategoryModalProps> = ({
 
     const resolvedType = isCustomMode ? 'custom' : type;
 
-    // Clone template site tickets so the new period comes pre-populated with master site list
-    let initialSites: SiteItem[] = [];
-    const sourceCategory = existingCategories.find((c) => c.type === resolvedType) || INITIAL_CATEGORIES.find((c) => c.type === resolvedType);
+    // Select source category template to copy site list from
+    let sourceCategory: UpdateCategory | undefined;
 
+    if (templateSource === 'swacam_22') {
+      sourceCategory = existingCategories.find((c) => c.type === 'swacam') || INITIAL_CATEGORIES.find((c) => c.type === 'swacam');
+    } else if (templateSource === 'manual_6') {
+      sourceCategory = existingCategories.find((c) => c.type === 'token_manual') || INITIAL_CATEGORIES.find((c) => c.type === 'token_manual');
+    } else {
+      sourceCategory = existingCategories.find((c) => c.type === 'token') || INITIAL_CATEGORIES.find((c) => c.type === 'token');
+    }
+
+    // Fallback if target template isn't found
+    if (!sourceCategory || !sourceCategory.sites || sourceCategory.sites.length === 0) {
+      sourceCategory = existingCategories.find((c) => c.sites && c.sites.length > 0) || INITIAL_CATEGORIES[2] || INITIAL_CATEGORIES[1];
+    }
+
+    // Clone template sites so the new period comes fully pre-populated
+    let initialSites: SiteItem[] = [];
     if (sourceCategory && sourceCategory.sites && sourceCategory.sites.length > 0) {
       initialSites = sourceCategory.sites.map((s, idx) => ({
         id: `s-${Date.now()}-${idx}-${Math.random().toString(36).substring(2, 6)}`,
@@ -129,13 +144,29 @@ export const AddCategoryModal: React.FC<AddCategoryModalProps> = ({
               type="text"
               value={period}
               onChange={(e) => setPeriod(e.target.value)}
-              placeholder="Contoh: Bulan Oktober 2026 atau 23–27 Oktober 2026"
+              placeholder="Contoh: Bulan November 2026 atau 23–27 November 2026"
               className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm text-slate-900 focus:outline-none focus:border-blue-600 transition"
               required
             />
           </div>
 
-          {/* 3. JENIS KATEGORI dengan Tanda Tambah (+) dan Opsi Mengetik Kategori Lain */}
+          {/* 3. Salin Template Site List */}
+          <div>
+            <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-1.5">
+              Salin Daftar Site dari Template:
+            </label>
+            <select
+              value={templateSource}
+              onChange={(e) => setTemplateSource(e.target.value as any)}
+              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm text-slate-900 focus:outline-none focus:border-blue-600 transition bg-white font-medium"
+            >
+              <option value="token_31">Pengisian Token Listrik SWFM – DEPOTEL (31 Site)</option>
+              <option value="swacam_22">Update Swacam / Catat Meter – DEPOTEL (22 Site)</option>
+              <option value="manual_6">Pengisian Token Listrik Manual – DEPOTEL (6 Site)</option>
+            </select>
+          </div>
+
+          {/* 4. JENIS KATEGORI dengan Tanda Tambah (+) dan Opsi Mengetik Kategori Lain */}
           <div className="pt-1">
             <div className="flex items-center justify-between mb-1.5">
               <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
@@ -220,12 +251,15 @@ export const AddCategoryModal: React.FC<AddCategoryModalProps> = ({
                     if (val === 'token') {
                       setAllowCamera(false);
                       setAllowTokenInput(true);
+                      setTemplateSource('token_31');
                     } else if (val === 'token_manual') {
                       setAllowCamera(true);
                       setAllowTokenInput(true);
+                      setTemplateSource('manual_6');
                     } else if (val === 'swacam') {
                       setAllowCamera(true);
                       setAllowTokenInput(false);
+                      setTemplateSource('swacam_22');
                     }
                   }}
                   className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm text-slate-900 focus:outline-none focus:border-blue-600 transition bg-white"
@@ -290,4 +324,3 @@ export const AddCategoryModal: React.FC<AddCategoryModalProps> = ({
     </div>
   );
 };
-
