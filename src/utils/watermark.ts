@@ -5,7 +5,16 @@
  */
 export function getPhotoWatermarkBrand(categoryTitleOrType?: string): string {
   if (!categoryTitleOrType) return 'DEPOTEL GROUP - SWACAM';
-  const lower = categoryTitleOrType.toLowerCase();
+  const lower = categoryTitleOrType.toLowerCase().trim();
+
+  // Specifically check for NETECO / UNMON
+  if (
+    lower.includes('neteco') ||
+    lower.includes('unmon') ||
+    lower === 'neteco_unmon'
+  ) {
+    return 'DEPOTEL GROUP - NETECO UNMON';
+  }
 
   // Specifically check for Token SWFM list
   if (lower.includes('swfm')) {
@@ -36,7 +45,12 @@ export function getPhotoWatermarkBrand(categoryTitleOrType?: string): string {
     return 'DEPOTEL GROUP - TOKEN MANUAL';
   }
 
-  return 'DEPOTEL GROUP - SWACAM';
+  // If already prefixed with DEPOTEL GROUP
+  if (categoryTitleOrType.toUpperCase().startsWith('DEPOTEL GROUP - ')) {
+    return categoryTitleOrType.toUpperCase();
+  }
+
+  return `DEPOTEL GROUP - ${categoryTitleOrType.toUpperCase()}`;
 }
 
 /**

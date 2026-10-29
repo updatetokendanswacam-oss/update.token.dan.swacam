@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, Download, Trash2, Shield, Clock, User as UserIcon, AlertTriangle, Loader2, CheckCircle2 } from 'lucide-react';
 import { SiteItem, User, PhotoRecord } from '../types';
+import { getPhotoWatermarkBrand } from '../utils/watermark';
 
 interface PhotoGalleryModalProps {
   site: SiteItem;
@@ -168,11 +169,9 @@ export const PhotoGalleryModal: React.FC<PhotoGalleryModalProps> = ({
               <UserIcon className="w-4 h-4 text-blue-400" />
               <span>Petugas: <strong>{activePhoto.capturedBy}</strong></span>
             </div>
-            {activePhoto.brandTitle && (
-              <div className="text-[11px] px-2 py-0.5 rounded bg-blue-950 text-blue-300 border border-blue-800">
-                {activePhoto.brandTitle}
-              </div>
-            )}
+            <div className="text-[11px] px-2 py-0.5 rounded bg-blue-950 text-blue-300 border border-blue-800">
+              {getPhotoWatermarkBrand(activePhoto.categoryTitle || activePhoto.categoryType || activePhoto.brandTitle)}
+            </div>
           </div>
           <p className="text-[11px] text-slate-500">
             Penyimpanan Permanen Cloud (Tanpa Batas Waktu)
