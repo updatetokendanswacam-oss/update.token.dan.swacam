@@ -298,6 +298,13 @@ export default function App() {
             };
           });
 
+          // Retain any newly added local categories not yet returned by remoteCats snapshot
+          for (const localCat of prevCategories) {
+            if (!merged.some((c) => c.id === localCat.id)) {
+              merged.push(localCat);
+            }
+          }
+
           saveCategories(merged);
           return merged;
         });
@@ -1174,6 +1181,31 @@ export default function App() {
     }
   }, [showToast]);
 
+  const handleAddCategory = useCallback(async (newCat: UpdateCategory) => {
+    try {
+      // 1. Save new category directly to Firestore
+      await saveCategoryToFirestore(newCat);
+
+      // 2. Update local React state & localStorage
+      setCategories((prev) => {
+        const exists = prev.some((c) => c.id === newCat.id);
+        const updated = exists ? prev.map((c) => (c.id === newCat.id ? newCat : c)) : [...prev, newCat];
+        saveCategories(updated);
+        return updated;
+      });
+
+      // 3. Immediately select new category & open detail view so list appears instantly
+      setSelectedCategoryId(newCat.id);
+      setViewMode('detail');
+      setShowAddCategoryModal(false);
+      showToast(`Periode baru "${newCat.title}" (${newCat.sites.length} site) berhasil dibuat`);
+    } catch (err: any) {
+      console.error('Error creating new category in Firestore:', err);
+      showToast(`Gagal membuat periode baru di database: ${err?.message || err}`);
+      throw err;
+    }
+  }, [showToast]);
+
   const handleUpdateSiteCount = useCallback(async (categoryId: string, newTotal: number) => {
     if (currentUser?.role !== 'admin') {
       showToast('Akses ditolak: Hanya Administrator yang berwenang mengubah jumlah site.');
@@ -1797,17 +1829,9 @@ export default function App() {
 
           {showAddCategoryModal && (
             <AddCategoryModal
+              existingCategories={categories}
               onClose={() => setShowAddCategoryModal(false)}
-              onAddCategory={(cat) => {
-                setCategories((prev) => {
-                  const updated = [...prev, cat];
-                  saveCategories(updated);
-                  saveCategoryToFirestore(cat).catch((err) => console.error(err));
-                  return updated;
-                });
-                setShowAddCategoryModal(false);
-                showToast(`Kategori "${cat.title}" berhasil dibuat`);
-              }}
+              onAddCategory={handleAddCategory}
             />
           )}
 

@@ -1,26 +1,30 @@
 import React, { useState } from 'react';
 import { X, Layers, PlusCircle, Calendar, Plus, PenLine, ListFilter } from 'lucide-react';
-import { UpdateCategory } from '../types';
+import { UpdateCategory, SiteItem } from '../types';
+import { INITIAL_CATEGORIES } from '../utils/initialData';
 
 interface AddCategoryModalProps {
+  existingCategories?: UpdateCategory[];
   onClose: () => void;
-  onAddCategory: (category: UpdateCategory) => void;
+  onAddCategory: (category: UpdateCategory) => Promise<void> | void;
 }
 
 export const AddCategoryModal: React.FC<AddCategoryModalProps> = ({
+  existingCategories = [],
   onClose,
   onAddCategory,
 }) => {
   const [title, setTitle] = useState('');
-  const [period, setPeriod] = useState('Bulan Oktober 2026');
+  const [period, setPeriod] = useState('Bulan November 2026');
   const [type, setType] = useState<'token' | 'swacam' | 'token_manual' | 'custom'>('token');
   const [isCustomMode, setIsCustomMode] = useState(false);
   const [customTypeName, setCustomTypeName] = useState('');
   const [allowCamera, setAllowCamera] = useState(false);
   const [allowTokenInput, setAllowTokenInput] = useState(true);
   const [errorMessage, setErrorMessage] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     const resolvedTitle = title.trim() || (isCustomMode && customTypeName.trim() ? `${customTypeName.trim()} – DEPOTEL` : '');
@@ -31,19 +35,45 @@ export const AddCategoryModal: React.FC<AddCategoryModalProps> = ({
 
     const resolvedType = isCustomMode ? 'custom' : type;
 
+    // Clone template site tickets so the new period comes pre-populated with master site list
+    let initialSites: SiteItem[] = [];
+    const sourceCategory = existingCategories.find((c) => c.type === resolvedType) || INITIAL_CATEGORIES.find((c) => c.type === resolvedType);
+
+    if (sourceCategory && sourceCategory.sites && sourceCategory.sites.length > 0) {
+      initialSites = sourceCategory.sites.map((s, idx) => ({
+        id: `s-${Date.now()}-${idx}-${Math.random().toString(36).substring(2, 6)}`,
+        meterId: s.meterId || '',
+        siteId: s.siteId || '',
+        siteName: s.siteName || '',
+        checked: false,
+        checkedBy: '',
+        tokens: [],
+        photos: [],
+        updatedAt: new Date().toISOString(),
+        updatedBy: '',
+      }));
+    }
+
     const newCategory: UpdateCategory = {
       id: `cat-${Date.now()}`,
       title: resolvedTitle,
-      period: period.trim() || 'Bulan Oktober 2026',
+      period: period.trim() || 'Bulan November 2026',
       type: resolvedType,
       customTypeName: isCustomMode && customTypeName.trim() ? customTypeName.trim() : undefined,
-      sites: [],
+      sites: initialSites,
       allowCamera: resolvedType === 'custom' ? allowCamera : (resolvedType === 'swacam' || resolvedType === 'token_manual'),
       allowTokenInput: resolvedType === 'custom' ? allowTokenInput : (resolvedType === 'token' || resolvedType === 'token_manual'),
     };
 
-    onAddCategory(newCategory);
-    onClose();
+    setIsSubmitting(true);
+    try {
+      await onAddCategory(newCategory);
+      onClose();
+    } catch (err: any) {
+      setErrorMessage(err?.message || 'Gagal membuat periode baru.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -241,16 +271,18 @@ export const AddCategoryModal: React.FC<AddCategoryModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-semibold cursor-pointer transition"
+              disabled={isSubmitting}
+              className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-semibold cursor-pointer transition disabled:opacity-50"
             >
               Batal
             </button>
             <button
               type="submit"
-              className="px-5 py-2.5 rounded-xl bg-[#1e2238] hover:bg-[#2b304f] text-white text-xs font-bold flex items-center gap-1.5 shadow transition cursor-pointer"
+              disabled={isSubmitting}
+              className="px-5 py-2.5 rounded-xl bg-[#1e2238] hover:bg-[#2b304f] text-white text-xs font-bold flex items-center gap-1.5 shadow transition cursor-pointer disabled:opacity-50"
             >
               <PlusCircle className="w-4 h-4" />
-              <span>Buat Periode Baru</span>
+              <span>{isSubmitting ? 'Memproses...' : 'Buat Periode Baru'}</span>
             </button>
           </div>
         </form>
