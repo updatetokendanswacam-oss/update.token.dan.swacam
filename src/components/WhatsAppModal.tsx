@@ -78,7 +78,7 @@ export const WhatsAppModal: React.FC<WhatsAppModalProps> = ({
     let header = '';
     if (isNeteco) {
       const percentageInt = totalSites > 0 ? Math.round((checkedSites / totalSites) * 100) : 0;
-      header = `${titleLine}\n${periodLine}\nJumlah Site NETECO : ${totalSites}\n✅ Sudah Tercentang :\n❌ Belum Tercentang :\n📊 Submitted NETECO : ${percentageInt}%\n____________________________________\n`;
+      header = `${titleLine}\n${periodLine}\nJumlah Site NETECO : ${totalSites}\n✅ Sudah Tercentang : ${checkedSites} Site\n❌ Belum Tercentang : ${uncheckedSites} Site\n📊 Submitted NETECO : ${percentageInt}%\n____________________________________\n`;
     } else {
       header = `${titleLine}\n${periodLine}\nJumlah Tiket Site : ${totalSites} Site\n✅ Sudah Tercentang : ${checkedSites} Site\n❌ Belum Tercentang : ${uncheckedSites} Site\n📊 Submitted : ${percentage}%\n=================================\n`;
     }
