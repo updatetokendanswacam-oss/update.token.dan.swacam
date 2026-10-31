@@ -1167,10 +1167,12 @@ export default function App() {
       return updated;
     });
 
-    // 2. Immediately select new category & open detail view so list appears instantly
+    // 2. Immediately switch navigation to dashboard and open detail view so list appears instantly
+    setActiveNav('dashboard');
     setSelectedCategoryId(newCat.id);
     setViewMode('detail');
     setShowAddCategoryModal(false);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
     showToast(`Periode baru "${newCat.title}" (${newCat.sites.length} site) berhasil dibuat`);
 
     // 3. Save new category to Firestore in background

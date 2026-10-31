@@ -9,6 +9,23 @@ interface AddCategoryModalProps {
   onAddCategory: (category: UpdateCategory) => Promise<void> | void;
 }
 
+export function getRealTimeWIBDateString(): string {
+  try {
+    const now = new Date();
+    const options: Intl.DateTimeFormatOptions = {
+      timeZone: 'Asia/Jakarta',
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+    };
+    const formatted = new Intl.DateTimeFormat('id-ID', options).format(now);
+    return `Hari ${formatted.replace(',', ' -')}`;
+  } catch {
+    return 'Hari Sabtu - 31 Oktober 2026';
+  }
+}
+
 export const AddCategoryModal: React.FC<AddCategoryModalProps> = ({
   existingCategories = [],
   onClose,
@@ -53,7 +70,7 @@ export const AddCategoryModal: React.FC<AddCategoryModalProps> = ({
 
     // Fallback if target template isn't found
     if (!sourceCategory || !sourceCategory.sites || sourceCategory.sites.length === 0) {
-      sourceCategory = existingCategories.find((c) => c.sites && c.sites.length > 0) || INITIAL_CATEGORIES[2] || INITIAL_CATEGORIES[1];
+      sourceCategory = existingCategories.find((c) => c.sites && c.sites.length > 0) || INITIAL_CATEGORIES[3] || INITIAL_CATEGORIES[0];
     }
 
     // Clone template sites so the new period comes fully pre-populated
@@ -74,10 +91,14 @@ export const AddCategoryModal: React.FC<AddCategoryModalProps> = ({
       }));
     }
 
+    const resolvedPeriod = resolvedType === 'neteco_unmon' && (!period.trim() || period === 'Bulan November 2026')
+      ? getRealTimeWIBDateString()
+      : (period.trim() || 'Bulan November 2026');
+
     const newCategory: UpdateCategory = {
       id: `cat-${Date.now()}`,
       title: resolvedTitle,
-      period: period.trim() || 'Bulan November 2026',
+      period: resolvedPeriod,
       type: resolvedType,
       customTypeName: isCustomMode && customTypeName.trim() ? customTypeName.trim() : undefined,
       sites: initialSites,
@@ -133,7 +154,7 @@ export const AddCategoryModal: React.FC<AddCategoryModalProps> = ({
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="Contoh: Pengisian Token Listrik SWFM – DEPOTEL"
+              placeholder="Contoh: List NETECO UNMON Eastern JABO"
               className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm text-slate-900 focus:outline-none focus:border-blue-600 transition"
               required
             />
@@ -141,15 +162,24 @@ export const AddCategoryModal: React.FC<AddCategoryModalProps> = ({
 
           {/* 2. Periode */}
           <div>
-            <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
-              <Calendar className="w-3.5 h-3.5 text-slate-500" />
-              <span>Periode</span>
+            <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+              <span className="flex items-center gap-1.5">
+                <Calendar className="w-3.5 h-3.5 text-slate-500" />
+                <span>Periode (Real-Time WIB)</span>
+              </span>
+              <button
+                type="button"
+                onClick={() => setPeriod(getRealTimeWIBDateString())}
+                className="text-[11px] font-bold text-blue-600 hover:text-blue-800 underline cursor-pointer"
+              >
+                Gunakan Tanggal Sekarang
+              </button>
             </label>
             <input
               type="text"
               value={period}
               onChange={(e) => setPeriod(e.target.value)}
-              placeholder="Contoh: Bulan November 2026 atau 23–27 November 2026"
+              placeholder="Contoh: Hari Sabtu - 31 Oktober 2026"
               className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm text-slate-900 focus:outline-none focus:border-blue-600 transition"
               required
             />
@@ -165,10 +195,10 @@ export const AddCategoryModal: React.FC<AddCategoryModalProps> = ({
               onChange={(e) => setTemplateSource(e.target.value as any)}
               className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm text-slate-900 focus:outline-none focus:border-blue-600 transition bg-white font-medium"
             >
+              <option value="neteco_48">List NETECO UNMON Eastern JABO (48 Site)</option>
               <option value="token_31">Pengisian Token Listrik SWFM – DEPOTEL (31 Site)</option>
               <option value="swacam_22">Update Swacam / Catat Meter – DEPOTEL (22 Site)</option>
               <option value="manual_6">Pengisian Token Listrik Manual – DEPOTEL (6 Site)</option>
-              <option value="neteco_48">List NETECO UNMON Eastern JABO (48 Site)</option>
               <option value="standby_team_6">JADWAL STANDBY TEAM MBP *DEPOTEL* INNER JAKTIM 29-10-2026 (6 Personel)</option>
             </select>
           </div>
@@ -256,7 +286,13 @@ export const AddCategoryModal: React.FC<AddCategoryModalProps> = ({
                     }
                     setType(val);
                     setIsCustomMode(false);
-                    if (val === 'token') {
+                    if (val === 'neteco_unmon') {
+                      setAllowCamera(true);
+                      setAllowTokenInput(false);
+                      setTemplateSource('neteco_48');
+                      setPeriod(getRealTimeWIBDateString());
+                      if (!title) setTitle('List NETECO UNMON Eastern JABO');
+                    } else if (val === 'token') {
                       setAllowCamera(false);
                       setAllowTokenInput(true);
                       setTemplateSource('token_31');
@@ -268,22 +304,18 @@ export const AddCategoryModal: React.FC<AddCategoryModalProps> = ({
                       setAllowCamera(true);
                       setAllowTokenInput(false);
                       setTemplateSource('swacam_22');
-                    } else if (val === 'neteco_unmon') {
-                      setAllowCamera(true);
-                      setAllowTokenInput(false);
-                      setTemplateSource('neteco_48');
                     } else if (val === 'standby_team') {
                       setAllowCamera(true);
                       setAllowTokenInput(false);
                       setTemplateSource('standby_team_6');
                     }
                   }}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm text-slate-900 focus:outline-none focus:border-blue-600 transition bg-white"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm text-slate-900 focus:outline-none focus:border-blue-600 transition bg-white font-medium"
                 >
+                  <option value="neteco_unmon">+ List NETECO UNMON Eastern JABO (48 Site)</option>
                   <option value="token">+ Token Listrik (Hanya No. Token)</option>
                   <option value="token_manual">+ Token Listrik Manual (No. Token & Kamera Dokumentasi)</option>
                   <option value="swacam">+ Swacam / Catat Meter (Kamera KWh Meter)</option>
-                  <option value="neteco_unmon">+ List NETECO UNMON Eastern JABO (48 Site)</option>
                   <option value="standby_team">+ Jadwal Standby Team MBP (Jadwal & Petugas Standby)</option>
                   <option value="custom">+ Ketik / Tambah Kategori Lain...</option>
                 </select>
