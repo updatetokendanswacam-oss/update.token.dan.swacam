@@ -88,7 +88,17 @@ export const WhatsAppModal: React.FC<WhatsAppModalProps> = ({
       const cleanSiteName = site.siteName ? site.siteName.trim() : site.siteId;
 
       if (isNeteco) {
-        return `${icon}${cleanSiteName}`;
+        let line = `${icon}${cleanSiteName}`;
+        if (site.tokens && site.tokens.length > 0) {
+          const tokensFormatted = site.tokens
+            .map((t) => t.trim().replace(/^#\s*/, ''))
+            .filter((t) => t.length > 0)
+            .join('\n');
+          if (tokensFormatted) {
+            line += `\n${tokensFormatted}`;
+          }
+        }
+        return line;
       }
 
       const meterStr = site.meterId && site.meterId.trim() !== '' && site.meterId.trim() !== '-' ? site.meterId.trim() : '';
