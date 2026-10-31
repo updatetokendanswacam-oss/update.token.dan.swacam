@@ -103,7 +103,7 @@ export const SiteCard: React.FC<SiteCardProps> = React.memo(({
                 </span>
               </div>
 
-              <h4 className="mt-1 text-sm sm:text-base font-bold text-white break-words leading-snug">
+              <h4 className="mt-1 text-sm sm:text-base font-bold text-white break-words leading-snug whitespace-pre-wrap">
                 {site.siteName}
               </h4>
             </div>

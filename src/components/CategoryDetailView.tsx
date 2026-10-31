@@ -109,7 +109,7 @@ const SiteItemCard: React.FC<SiteItemCardProps> = React.memo(({
             </div>
 
             {/* Site Name */}
-            <p className="mt-1 text-xs sm:text-sm font-semibold text-slate-700 break-words leading-snug">
+            <p className="mt-1 text-xs sm:text-sm font-semibold text-slate-700 break-words leading-snug whitespace-pre-wrap">
               {site.siteName}
             </p>
 
