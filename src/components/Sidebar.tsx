@@ -12,6 +12,7 @@ import {
   HardDrive
 } from 'lucide-react';
 import { User, UpdateCategory } from '../types';
+import { useSyncStatus } from '../hooks/useSyncStatus';
 
 interface SidebarProps {
   currentUser: User;
@@ -36,6 +37,7 @@ export const Sidebar: React.FC<SidebarProps> = React.memo(({
   onCloseMobile,
   onOpenGoogleDrive,
 }) => {
+  const { syncState } = useSyncStatus();
   const isAdmin = currentUser.role === 'admin';
 
   const totalSites = React.useMemo(
@@ -69,8 +71,18 @@ export const Sidebar: React.FC<SidebarProps> = React.memo(({
             <div className="font-black text-sm tracking-wider uppercase text-white leading-tight">
               DEPOTEL GROUP
             </div>
-            <div className="text-[10px] font-bold tracking-widest uppercase text-blue-400">
-              MONITORING SYSTEM
+            <div className="flex items-center gap-1.5 text-[10px] font-bold tracking-widest uppercase text-blue-400">
+              <span>MONITORING SYSTEM</span>
+              <span
+                className={`w-2 h-2 rounded-full shrink-0 ${
+                  syncState === 'live'
+                    ? 'bg-emerald-400 animate-pulse'
+                    : syncState === 'connecting'
+                    ? 'bg-amber-400 animate-ping'
+                    : 'bg-rose-400'
+                }`}
+                title={`Koneksi Database: ${syncState.toUpperCase()}`}
+              />
             </div>
           </div>
         </div>

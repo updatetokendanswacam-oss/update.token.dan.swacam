@@ -76,6 +76,7 @@ export default function App() {
 
   // Ref to track deleted category IDs and prevent snapshot listener from restoring them
   const deletedCategoryIdsRef = React.useRef<Set<string>>(new Set());
+  const pendingCategoryIdsRef = React.useRef<Set<string>>(new Set());
 
   // Navigation tab: 'dashboard' (Beranda) | 'settings' (Pengaturan)
   const [activeNav, setActiveNav] = useState<'dashboard' | 'settings'>('dashboard');
@@ -234,66 +235,18 @@ export default function App() {
 
         setCategories((prevCategories) => {
           const merged = fixedCats.map((remoteCat) => {
-            const localCat = prevCategories.find((c) => c.id === remoteCat.id);
-            if (!localCat) return remoteCat;
+            // Once confirmed in Firestore snapshot, remove from pending creates
+            pendingCategoryIdsRef.current.delete(remoteCat.id);
 
             const mergedSites = remoteCat.sites.map((remoteSite) => {
-              const localSite = localCat.sites.find((s) => s.id === remoteSite.id);
-              if (!localSite) return remoteSite;
-
-              const remoteTime = remoteSite.updatedAt ? new Date(remoteSite.updatedAt).getTime() : 0;
-              const localTime = localSite.updatedAt ? new Date(localSite.updatedAt).getTime() : 0;
-
-              // Preserve local status if local edit timestamp is newer
-              const useLocalStatus = localTime > remoteTime;
-              const finalChecked = useLocalStatus ? localSite.checked : remoteSite.checked;
-              const finalCheckedBy = useLocalStatus
-                ? localSite.checkedBy
-                : (remoteSite.checked ? remoteSite.checkedBy : '');
-              const finalUpdatedAt = useLocalStatus ? localSite.updatedAt : remoteSite.updatedAt;
-              const finalUpdatedBy = useLocalStatus ? localSite.updatedBy : remoteSite.updatedBy;
-
-              const finalSiteId = useLocalStatus ? (localSite.siteId || remoteSite.siteId) : (remoteSite.siteId || localSite.siteId);
-              const finalSiteName = useLocalStatus ? (localSite.siteName || remoteSite.siteName) : (remoteSite.siteName || localSite.siteName);
-              const finalMeterId = useLocalStatus ? (localSite.meterId || remoteSite.meterId) : (remoteSite.meterId || localSite.meterId);
-              const finalTokens = useLocalStatus ? (localSite.tokens || remoteSite.tokens || []) : (remoteSite.tokens || localSite.tokens || []);
-
-              const localPhotos = localSite.photos || [];
-              const remotePhotos = remoteSite.photos || [];
-
-              const photoMap = new Map<string, PhotoRecord>();
-
-              // Put remote photos first
-              for (const rp of remotePhotos) {
-                photoMap.set(rp.id, rp);
+              // 1. If this exact site has an in-flight pending edit on THIS client, preserve it
+              const pending = syncManager.getPendingSite(remoteSite.id);
+              if (pending) {
+                return pending;
               }
-
-              // Merge local photos so dataUrl and storageUrl are preserved
-              for (const lp of localPhotos) {
-                const existing = photoMap.get(lp.id);
-                if (!existing) {
-                  photoMap.set(lp.id, lp);
-                } else {
-                  photoMap.set(lp.id, {
-                    ...existing,
-                    dataUrl: existing.dataUrl || lp.dataUrl,
-                    storageUrl: existing.storageUrl || lp.storageUrl,
-                  });
-                }
-              }
-
-              return {
-                ...remoteSite,
-                siteId: finalSiteId,
-                siteName: finalSiteName,
-                meterId: finalMeterId,
-                tokens: finalTokens,
-                checked: finalChecked,
-                checkedBy: finalCheckedBy,
-                updatedAt: finalUpdatedAt,
-                updatedBy: finalUpdatedBy,
-                photos: Array.from(photoMap.values()),
-              };
+              // 2. Otherwise, adopt the authoritative Firestore record directly!
+              // This guarantees instant, reliable sync across all Admin & User accounts.
+              return remoteSite;
             });
 
             return {
@@ -302,12 +255,12 @@ export default function App() {
             };
           });
 
-          // Retain any newly added local categories not yet returned by remoteCats snapshot
+          // Retain newly added local categories only if they are genuinely pending upload
           for (const localCat of prevCategories) {
             if (deletedCategoryIdsRef.current.has(localCat.id)) {
               continue; // Do not restore categories deleted by the user
             }
-            if (!merged.some((c) => c.id === localCat.id)) {
+            if (pendingCategoryIdsRef.current.has(localCat.id) && !merged.some((c) => c.id === localCat.id)) {
               merged.push(localCat);
             }
           }
@@ -335,61 +288,6 @@ export default function App() {
       unsubscribePhotos();
     };
   }, []);
-
-  // Hydrate & synchronize permanent cloud photos into category sites
-  useEffect(() => {
-    if (allPhotos.length === 0) return;
-
-    setCategories((prevCategories) => {
-      let changed = false;
-      const updated = prevCategories.map((cat) => {
-        const updatedSites = cat.sites.map((site) => {
-          const siteCloudPhotos = allPhotos.filter((p) => p.siteId === site.id);
-          if (siteCloudPhotos.length === 0) return site;
-
-          const existingPhotoMap = new Map((site.photos || []).map((p) => [p.id, p]));
-          let siteChanged = false;
-
-          const mergedPhotos: PhotoRecord[] = siteCloudPhotos.map((cloudPhoto) => {
-            const existing = existingPhotoMap.get(cloudPhoto.id);
-            if (!existing) {
-              siteChanged = true;
-              return cloudPhoto;
-            }
-            if ((!existing.dataUrl && cloudPhoto.dataUrl) || (!existing.storageUrl && cloudPhoto.storageUrl)) {
-              siteChanged = true;
-              return {
-                ...existing,
-                dataUrl: cloudPhoto.dataUrl || existing.dataUrl,
-                storageUrl: cloudPhoto.storageUrl || existing.storageUrl,
-              };
-            }
-            return existing;
-          });
-
-          // Retain any pending local photos not yet emitted by snapshot
-          for (const localPhoto of site.photos || []) {
-            if (!siteCloudPhotos.some((cp) => cp.id === localPhoto.id)) {
-              mergedPhotos.push(localPhoto);
-            }
-          }
-
-          if (siteChanged || mergedPhotos.length !== (site.photos || []).length) {
-            changed = true;
-            return {
-              ...site,
-              photos: mergedPhotos,
-            };
-          }
-          return site;
-        });
-
-        return { ...cat, sites: updatedSites };
-      });
-
-      return changed ? updated : prevCategories;
-    });
-  }, [allPhotos]);
 
   // Debounced persistence to eliminate UI blocking on frequent updates
   useEffect(() => {
@@ -734,13 +632,15 @@ export default function App() {
 
           if (isExactMatch || isSameSiteCode || isSameMeter) {
             modified = true;
-            return {
+            const updatedSite: SiteItem = {
               ...site,
               checked: newCheckedStatus,
               checkedBy: newCheckedStatus ? userName : '',
               updatedAt: nowIso,
               updatedBy: userName,
             };
+            syncManager.markSitePending(updatedSite, cat.id);
+            return updatedSite;
           }
           return site;
         });
@@ -755,12 +655,22 @@ export default function App() {
       // Instantly queue debounced background sync to Firestore
       const affectedCategories = updated.filter((c) => affectedCatIds.has(c.id));
       for (const cat of affectedCategories) {
-        syncManager.queueCategorySave(cat);
+        syncManager.queueCategorySave(cat, false, (err) => {
+          syncManager.clearSitePending(targetSiteId);
+          setCategories((current) =>
+            updateSiteGlobally(current, targetSiteId, (s) => ({
+              ...s,
+              checked: !newCheckedStatus,
+              checkedBy: !newCheckedStatus ? (refSite.checkedBy || '') : '',
+            }))
+          );
+          showToast(`Gagal menyimpan perubahan ke database. Perubahan dikembalikan.`);
+        });
       }
 
       return updated;
     });
-  }, [currentUser?.name]);
+  }, [currentUser?.name, showToast]);
 
   // Status color update (🔴 off, 🟡 ijin/sakit, 🟢 standby) for site items
   const handleUpdateSiteStatusColor = useCallback((siteId: string, newStatusColor: 'off' | 'ijin_sakit' | 'standby') => {
@@ -786,7 +696,7 @@ export default function App() {
               updatedName = updatedName.replace(/^[🔴🟡🟢]/, newEmoji);
             }
 
-            return {
+            const updatedSite: SiteItem = {
               ...site,
               statusColor: newStatusColor,
               checked: newCheckedStatus,
@@ -795,6 +705,8 @@ export default function App() {
               updatedAt: nowIso,
               updatedBy: userName,
             };
+            syncManager.markSitePending(updatedSite, cat.id);
+            return updatedSite;
           }
           return site;
         });
@@ -847,12 +759,14 @@ export default function App() {
           if (isExactMatch || isSameSiteCode || isSameMeter) {
             modified = true;
             const currentTokens = site.tokens || [];
-            return {
+            const updatedSite: SiteItem = {
               ...site,
               tokens: [...currentTokens, token],
               updatedAt: nowIso,
               updatedBy: userName,
             };
+            syncManager.markSitePending(updatedSite, cat.id);
+            return updatedSite;
           }
           return site;
         });
@@ -905,12 +819,14 @@ export default function App() {
           if (isExactMatch || isSameSiteCode || isSameMeter) {
             modified = true;
             const currentTokens = site.tokens || [];
-            return {
+            const updatedSite: SiteItem = {
               ...site,
               tokens: currentTokens.filter((_, idx) => idx !== tokenIndex),
               updatedAt: nowIso,
               updatedBy: userName,
             };
+            syncManager.markSitePending(updatedSite, cat.id);
+            return updatedSite;
           }
           return site;
         });
@@ -944,12 +860,14 @@ export default function App() {
         const newPhotos = exists
           ? existingPhotos.map((p) => (p.id === photo.id ? photo : p))
           : [...existingPhotos, photo];
-        return {
+        const updatedSite: SiteItem = {
           ...site,
           photos: newPhotos,
           updatedAt: new Date().toISOString(),
           updatedBy: currentUser?.name || 'Petugas',
         };
+        syncManager.markSitePending(updatedSite, site.id);
+        return updatedSite;
       });
 
       saveCategories(updated);
@@ -1016,10 +934,12 @@ export default function App() {
                 modified = true;
                 const existingPhotos = site.photos || [];
                 const newPhotos = existingPhotos.map((p) => (p.id === savedPhoto.id ? savedPhoto : p));
-                return {
+                const updatedSite: SiteItem = {
                   ...site,
                   photos: newPhotos,
                 };
+                syncManager.markSitePending(updatedSite, cat.id);
+                return updatedSite;
               }
               return site;
             });
@@ -1215,6 +1135,7 @@ export default function App() {
   }, []);
 
   const handleSaveEditedCategory = useCallback(async (updatedCategory: UpdateCategory) => {
+    pendingCategoryIdsRef.current.add(updatedCategory.id);
     // 1. Optimistic update: Update React state & localStorage instantly
     setCategories((prev) => {
       const updated = prev.map((cat) => (cat.id === updatedCategory.id ? updatedCategory : cat));
@@ -1236,6 +1157,7 @@ export default function App() {
   const handleAddCategory = useCallback(async (newCat: UpdateCategory) => {
     // Clear from deleted set if re-created
     deletedCategoryIdsRef.current.delete(newCat.id);
+    pendingCategoryIdsRef.current.add(newCat.id);
 
     // 1. Update local React state & localStorage instantly
     setCategories((prev) => {
@@ -1368,6 +1290,7 @@ export default function App() {
 
       // 1. Track deleted category ID so snapshot listener never restores it
       deletedCategoryIdsRef.current.add(catId);
+      pendingCategoryIdsRef.current.delete(catId);
 
       // 2. Optimistic update: Update React state & localStorage instantly
       const remainingCategories = categories.filter((c) => c.id !== catId);

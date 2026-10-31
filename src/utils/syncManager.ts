@@ -2,22 +2,29 @@
  * Real-Time Synchronization & Write Queue Manager.
  * Ensures instant UI updates (0ms optimistic latency) while coordinating
  * conflict-free Firestore persistence, automatic network reconnection,
- * and accurate LIVE / CONNECTING / OFFLINE state monitoring.
+ * site-level in-flight isolation, and accurate LIVE / CONNECTING / OFFLINE state monitoring.
  */
 
-import { enableNetwork, disableNetwork } from 'firebase/firestore';
+import { enableNetwork } from 'firebase/firestore';
 import { db } from '../firebase';
-import { UpdateCategory } from '../types';
+import { UpdateCategory, SiteItem } from '../types';
 import { saveCategoryToFirestore } from './firestoreService';
 
 export type SyncState = 'live' | 'connecting' | 'offline';
 
 type SyncListener = (state: SyncState) => void;
 
+interface PendingSiteEntry {
+  site: SiteItem;
+  categoryId: string;
+  expiresAt: number;
+}
+
 class RealtimeSyncManager {
   private currentState: SyncState = 'connecting';
   private listeners: Set<SyncListener> = new Set();
-  private pendingCategoryWrites: Map<string, { category: UpdateCategory; timer: any }> = new Map();
+  private pendingCategoryWrites: Map<string, { category: UpdateCategory; timer: any; onError?: (err: any) => void }> = new Map();
+  private pendingSiteChanges: Map<string, PendingSiteEntry> = new Map();
   private isNetworkReconnecting = false;
 
   constructor() {
@@ -100,35 +107,85 @@ class RealtimeSyncManager {
   }
 
   /**
-   * Queues a category save to Firestore with automatic 120ms debounce.
+   * Registers a site update initiated on THIS client as in-flight pending.
+   * This protects the local optimistic edit from being overwritten by an older
+   * Firestore snapshot while the write is traveling to the cloud.
+   */
+  public markSitePending(site: SiteItem, categoryId: string): void {
+    this.pendingSiteChanges.set(site.id, {
+      site,
+      categoryId,
+      expiresAt: Date.now() + 6000, // 6s TTL safety window
+    });
+  }
+
+  public clearSitePending(siteId: string): void {
+    this.pendingSiteChanges.delete(siteId);
+  }
+
+  public getPendingSite(siteId: string): SiteItem | undefined {
+    const entry = this.pendingSiteChanges.get(siteId);
+    if (!entry) return undefined;
+    if (Date.now() > entry.expiresAt) {
+      this.pendingSiteChanges.delete(siteId);
+      return undefined;
+    }
+    return entry.site;
+  }
+
+  public isSitePending(siteId: string): boolean {
+    return this.getPendingSite(siteId) !== undefined;
+  }
+
+  /**
+   * Queues a category save to Firestore with automatic 80ms debounce.
    * If a user clicks multiple checkmarks rapidly or edits multiple sites,
    * they are batched into a single efficient write per category, preventing
    * race conditions and write limits.
    */
-  public queueCategorySave(category: UpdateCategory, immediate = false): void {
+  public queueCategorySave(
+    category: UpdateCategory,
+    immediate = false,
+    onError?: (err: any) => void
+  ): void {
     const existing = this.pendingCategoryWrites.get(category.id);
     if (existing) {
       clearTimeout(existing.timer);
     }
 
-    const delay = immediate ? 0 : 120;
+    const delay = immediate ? 0 : 80;
 
     const timer = setTimeout(async () => {
       this.pendingCategoryWrites.delete(category.id);
       try {
         await saveCategoryToFirestore(category);
+        // Clear pending flags for sites in this category now that Firestore write succeeded
+        category.sites.forEach((s) => {
+          this.pendingSiteChanges.delete(s.id);
+        });
       } catch (err) {
         console.warn(`Write queue retry scheduled for category ${category.id}:`, err);
-        // If write fails due to offline or transient error, retry after 2.5s
+        if (onError) {
+          try {
+            onError(err);
+          } catch (e) {
+            console.error('Error in write error callback:', e);
+          }
+        }
+        // If write fails due to offline or transient error, retry after 2s
         if (typeof navigator !== 'undefined' && navigator.onLine) {
           setTimeout(() => {
-            saveCategoryToFirestore(category).catch(() => {});
-          }, 2500);
+            saveCategoryToFirestore(category)
+              .then(() => {
+                category.sites.forEach((s) => this.pendingSiteChanges.delete(s.id));
+              })
+              .catch(() => {});
+          }, 2000);
         }
       }
     }, delay);
 
-    this.pendingCategoryWrites.set(category.id, { category, timer });
+    this.pendingCategoryWrites.set(category.id, { category, timer, onError });
   }
 
   /**
@@ -138,9 +195,11 @@ class RealtimeSyncManager {
     this.pendingCategoryWrites.forEach(({ category, timer }, catId) => {
       clearTimeout(timer);
       this.pendingCategoryWrites.delete(catId);
-      saveCategoryToFirestore(category).catch((e) =>
-        console.warn('Flushed write error:', e)
-      );
+      saveCategoryToFirestore(category)
+        .then(() => {
+          category.sites.forEach((s) => this.pendingSiteChanges.delete(s.id));
+        })
+        .catch((e) => console.warn('Flushed write error:', e));
     });
   }
 }

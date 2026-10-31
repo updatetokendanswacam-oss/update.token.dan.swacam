@@ -357,6 +357,7 @@ export async function saveCategoryToFirestore(category: UpdateCategory): Promise
     siteName: s.siteName || '',
     checked: Boolean(s.checked),
     checkedBy: s.checked ? (s.checkedBy || s.updatedBy || '') : '',
+    statusColor: s.statusColor || undefined,
     tokens: Array.isArray(s.tokens) ? s.tokens : [],
     updatedAt: s.updatedAt || new Date().toISOString(),
     updatedBy: s.updatedBy || '',
