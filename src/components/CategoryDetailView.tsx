@@ -14,11 +14,14 @@ import {
   CornerDownLeft,
   Eye,
   PlusSquare,
-  ChevronDown
+  ChevronDown,
+  Calendar,
+  RefreshCw
 } from 'lucide-react';
 import { UpdateCategory, SiteItem, User } from '../types';
 import { useSyncStatus } from '../hooks/useSyncStatus';
 import { getOptimizedPhotoUrl } from '../utils/photoCache';
+import { getRealTimeWIBDateString } from './AddCategoryModal';
 
 interface SiteItemCardProps {
   site: SiteItem;
@@ -340,12 +343,35 @@ const SiteItemCard: React.FC<SiteItemCardProps> = React.memo(({
   );
 });
 
+function formatCalendarPickerDate(dateStr: string): string {
+  if (!dateStr) return '';
+  try {
+    const parts = dateStr.split('-');
+    if (parts.length === 3) {
+      const year = parseInt(parts[0], 10);
+      const month = parseInt(parts[1], 10) - 1;
+      const day = parseInt(parts[2], 10);
+      const d = new Date(year, month, day);
+      const options: Intl.DateTimeFormatOptions = {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+      };
+      const formatted = new Intl.DateTimeFormat('id-ID', options).format(d);
+      return `Hari ${formatted.replace(',', ' -')}`;
+    }
+  } catch {}
+  return dateStr;
+}
+
 interface CategoryDetailViewProps {
   category: UpdateCategory;
   currentUser: User | null;
   onBackToOverview: () => void;
   onOpenWhatsApp: () => void;
   onEditCategoryTitle: () => void;
+  onUpdateCategoryPeriod?: (categoryId: string, newPeriod: string) => Promise<void> | void;
   onAddNewSite: () => void;
   onToggleCheck: (siteId: string) => void;
   onEditSite: (site: SiteItem) => void;
@@ -363,6 +389,7 @@ export const CategoryDetailView: React.FC<CategoryDetailViewProps> = React.memo(
   onBackToOverview,
   onOpenWhatsApp,
   onEditCategoryTitle,
+  onUpdateCategoryPeriod,
   onAddNewSite,
   onToggleCheck,
   onEditSite,
@@ -377,6 +404,21 @@ export const CategoryDetailView: React.FC<CategoryDetailViewProps> = React.memo(
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'unchecked' | 'checked'>('all');
   const [displayLimit, setDisplayLimit] = useState(35);
+
+  const [isEditingPeriod, setIsEditingPeriod] = useState(false);
+  const [periodInput, setPeriodInput] = useState(category.period || '');
+
+  React.useEffect(() => {
+    setPeriodInput(category.period || '');
+  }, [category.period]);
+
+  const handleSavePeriod = () => {
+    const clean = periodInput.trim();
+    if (clean && onUpdateCategoryPeriod) {
+      onUpdateCategoryPeriod(category.id, clean);
+    }
+    setIsEditingPeriod(false);
+  };
 
   const totalSites = category.sites.length;
   const checkedSites = useMemo(
@@ -499,7 +541,180 @@ export const CategoryDetailView: React.FC<CategoryDetailViewProps> = React.memo(
         <h1 className="text-2xl sm:text-3xl font-black text-[#1e2238] tracking-tight">
           {category.title}
         </h1>
-        <p className="text-sm text-slate-500 font-medium">{category.period}</p>
+        {isNeteco ? (
+          /* Calendar Day & Date Box (KHUSUS LIST NETECO UNMON EASTERN JABO) */
+          <div className="mt-2.5 p-3.5 bg-white border border-emerald-200/90 rounded-2xl shadow-2xs flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+            <div
+              className="flex items-center gap-3 min-w-0 flex-1"
+            >
+              {/* Icon Kalender Nyata - Klik untuk buka picker */}
+              <div className="relative p-2.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 shrink-0 transition cursor-pointer group" title="Buka Kalender untuk Setel Tanggal">
+                <Calendar className="w-5 h-5 text-emerald-600 group-hover:scale-110 transition-transform" />
+                <input
+                  type="date"
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  title="Klik untuk memilih tanggal dari kalender"
+                  onChange={(e) => {
+                    if (e.target.value) {
+                      const formatted = formatCalendarPickerDate(e.target.value);
+                      if (formatted) {
+                        setPeriodInput(formatted);
+                        if (onUpdateCategoryPeriod) {
+                          onUpdateCategoryPeriod(category.id, formatted);
+                        }
+                      }
+                    }
+                  }}
+                />
+              </div>
+
+              {isEditingPeriod ? (
+                <div className="flex items-center gap-2 flex-1 min-w-0 flex-wrap sm:flex-nowrap" onClick={(e) => e.stopPropagation()}>
+                  <input
+                    type="text"
+                    value={periodInput}
+                    onChange={(e) => setPeriodInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleSavePeriod();
+                      }
+                    }}
+                    placeholder="Contoh: Hari Sabtu - 31 Oktober 2026"
+                    className="flex-1 min-w-[180px] px-3 py-1.5 rounded-xl border border-blue-500 font-bold text-xs sm:text-sm text-slate-900 bg-blue-50/20 focus:outline-none"
+                    autoFocus
+                  />
+
+                  {/* Kalender Interaktif (Native Date Picker Button) */}
+                  <div className="relative shrink-0">
+                    <button
+                      type="button"
+                      className="px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
+                    >
+                      <Calendar className="w-3.5 h-3.5 text-indigo-600" />
+                      <span>📅 Kalender</span>
+                    </button>
+                    <input
+                      type="date"
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                      title="Pilih Tanggal dari Kalender Nyata"
+                      onChange={(e) => {
+                        if (e.target.value) {
+                          const formatted = formatCalendarPickerDate(e.target.value);
+                          if (formatted) setPeriodInput(formatted);
+                        }
+                      }}
+                    />
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setPeriodInput(getRealTimeWIBDateString())}
+                    className="px-2.5 py-1.5 rounded-xl bg-emerald-100 hover:bg-emerald-200 text-emerald-800 text-xs font-bold flex items-center gap-1 transition cursor-pointer shrink-0"
+                    title="Suntikkan Tanggal WIB Real-Time Kalender"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    <span>Real-Time WIB</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleSavePeriod}
+                    className="px-3 py-1.5 rounded-xl bg-[#1e2238] hover:bg-[#2b304f] text-white text-xs font-bold flex items-center gap-1 transition cursor-pointer shrink-0"
+                  >
+                    <Check className="w-3.5 h-3.5" />
+                    <span>Simpan</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsEditingPeriod(false);
+                      setPeriodInput(category.period || '');
+                    }}
+                    className="p-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 cursor-pointer shrink-0"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              ) : (
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                      Hari & Tanggal NETECO:
+                    </span>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                      Real-Time WIB / Kalender Klik
+                    </span>
+                  </div>
+                  <p className="text-sm sm:text-base font-extrabold text-slate-900 mt-0.5 truncate">
+                    {category.period || getRealTimeWIBDateString()}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {!isEditingPeriod && (
+              <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                {/* Kalender Interaktif (Native Date Picker Button) */}
+                <div className="relative shrink-0">
+                  <button
+                    type="button"
+                    className="px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-2xs"
+                  >
+                    <Calendar className="w-3.5 h-3.5 text-indigo-600" />
+                    <span>📅 Pilih Tanggal</span>
+                  </button>
+                  <input
+                    type="date"
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                    title="Klik untuk membuka kalender interaktif"
+                    onChange={(e) => {
+                      if (e.target.value) {
+                        const formatted = formatCalendarPickerDate(e.target.value);
+                        if (formatted) {
+                          setPeriodInput(formatted);
+                          if (onUpdateCategoryPeriod) {
+                            onUpdateCategoryPeriod(category.id, formatted);
+                          }
+                        }
+                      }
+                    }}
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const realTimeStr = getRealTimeWIBDateString();
+                    if (onUpdateCategoryPeriod) {
+                      onUpdateCategoryPeriod(category.id, realTimeStr);
+                    }
+                    setPeriodInput(realTimeStr);
+                  }}
+                  className="px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-700 text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
+                  title="Perbarui otomatis ke Tanggal WIB Hari Ini"
+                >
+                  <RefreshCw className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Real-Time WIB</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setIsEditingPeriod(true)}
+                  className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
+                  title="Ubah hari/tanggal secara manual"
+                >
+                  <Edit2 className="w-3.5 h-3.5 text-slate-500" />
+                  <span>Setting Manual</span>
+                </button>
+              </div>
+            )}
+          </div>
+        ) : (
+          /* SISA KATEGORI LAIN (Swacam, Token SWFM, Token Manual): Tampilkan teks biasa */
+          <p className="text-sm text-slate-500 font-medium mt-1">{category.period}</p>
+        )}
 
         {/* Legend banner for Standby Team */}
         {isStandbyTeam && (

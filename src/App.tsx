@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   loadCategories,
   saveCategories,
@@ -14,6 +14,7 @@ import {
   recordNameLogin,
   loadDeletedCategoryIds,
   saveDeletedCategoryIds,
+  getAllPhotosFromDB,
 } from './utils/storage';
 import {
   User,
@@ -44,6 +45,7 @@ import {
 import { INITIAL_CATEGORIES, INITIAL_USERS } from './utils/initialData';
 import { savePhotoToPhoneGallery } from './utils/galleryService';
 import { syncManager } from './utils/syncManager';
+import { cachePhotoUrl } from './utils/photoCache';
 import { Header } from './components/Header';
 import { Sidebar } from './components/Sidebar';
 import { OfflineBanner } from './components/OfflineBanner';
@@ -68,6 +70,111 @@ const InviteModal = React.lazy(() => import('./components/InviteModal').then((m)
 const ConfirmDeleteModal = React.lazy(() => import('./components/ConfirmDeleteModal').then((m) => ({ default: m.ConfirmDeleteModal })));
 const EditCategoryModal = React.lazy(() => import('./components/EditCategoryModal').then((m) => ({ default: m.EditCategoryModal })));
 const GoogleDriveModal = React.lazy(() => import('./components/GoogleDriveModal').then((m) => ({ default: m.GoogleDriveModal })));
+
+export function mergePhotosIntoCategories(
+  categories: UpdateCategory[],
+  allPhotos: PhotoRecord[]
+): UpdateCategory[] {
+  if (!allPhotos || allPhotos.length === 0) return categories;
+
+  const photoMapBySite = new Map<string, PhotoRecord[]>();
+
+  for (const photo of allPhotos) {
+    if (!photo || !photo.id) continue;
+    if (photo.id && (photo.dataUrl || photo.storageUrl)) {
+      cachePhotoUrl(photo.id, photo.dataUrl || photo.storageUrl || '');
+    }
+
+    const keys = new Set<string>();
+    if (photo.siteId) keys.add(photo.siteId.toLowerCase().trim());
+    if (photo.siteName) keys.add(photo.siteName.toLowerCase().trim());
+    if (photo.meterId && photo.meterId !== '-') keys.add(photo.meterId.trim());
+
+    for (const key of keys) {
+      if (!photoMapBySite.has(key)) {
+        photoMapBySite.set(key, []);
+      }
+      photoMapBySite.get(key)!.push(photo);
+    }
+  }
+
+  let categoriesModified = false;
+
+  const newCategories = categories.map((cat) => {
+    let sitesModified = false;
+
+    const newSites = cat.sites.map((site) => {
+      const existingPhotos = site.photos || [];
+      const siteIdKey = site.id?.toLowerCase().trim();
+      const siteCodeKey = site.siteId?.toLowerCase().trim();
+      const siteNameKey = site.siteName?.toLowerCase().trim();
+      const meterKey = site.meterId && site.meterId !== '-' ? site.meterId.trim() : '';
+
+      const matched: PhotoRecord[] = [];
+      if (siteIdKey && photoMapBySite.has(siteIdKey)) matched.push(...photoMapBySite.get(siteIdKey)!);
+      if (siteCodeKey && photoMapBySite.has(siteCodeKey)) matched.push(...photoMapBySite.get(siteCodeKey)!);
+      if (siteNameKey && photoMapBySite.has(siteNameKey)) matched.push(...photoMapBySite.get(siteNameKey)!);
+      if (meterKey && photoMapBySite.has(meterKey)) matched.push(...photoMapBySite.get(meterKey)!);
+
+      if (matched.length === 0 && existingPhotos.length === 0) {
+        return site;
+      }
+
+      const photoMap = new Map<string, PhotoRecord>();
+      existingPhotos.forEach((p) => {
+        if (p && p.id) photoMap.set(p.id, p);
+      });
+      matched.forEach((p) => {
+        if (p && p.id) {
+          const current = photoMap.get(p.id);
+          if (current) {
+            photoMap.set(p.id, {
+              ...current,
+              ...p,
+              dataUrl: p.dataUrl || current.dataUrl || '',
+              storageUrl: p.storageUrl || current.storageUrl || '',
+            });
+          } else {
+            photoMap.set(p.id, p);
+          }
+        }
+      });
+
+      const mergedPhotos = Array.from(photoMap.values()).sort(
+        (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+      );
+
+      const isDifferent =
+        mergedPhotos.length !== existingPhotos.length ||
+        mergedPhotos.some((p, i) => {
+          const orig = existingPhotos[i];
+          return !orig || orig.id !== p.id || orig.dataUrl !== p.dataUrl || orig.storageUrl !== p.storageUrl;
+        });
+
+      if (isDifferent) {
+        sitesModified = true;
+        return {
+          ...site,
+          photos: mergedPhotos,
+        };
+      }
+
+      return site;
+    });
+
+    if (sitesModified) {
+      categoriesModified = true;
+      return {
+        ...cat,
+        sites: newSites,
+      };
+    }
+
+    return cat;
+  });
+
+  return categoriesModified ? newCategories : categories;
+}
 
 export default function App() {
   // Core Operational States
@@ -269,8 +376,9 @@ export default function App() {
             }
           }
 
-          saveCategories(merged);
-          return merged;
+          const withPhotos = mergePhotosIntoCategories(merged, allPhotosRef.current);
+          saveCategories(withPhotos);
+          return withPhotos;
         });
       }
     });
@@ -280,18 +388,33 @@ export default function App() {
     };
   }, []);
 
-  // Real-time subscription to permanent documentation photos in Firestore
+  // Ref to always access latest photos in callbacks
+  const allPhotosRef = useRef<PhotoRecord[]>(allPhotos);
   useEffect(() => {
-    const unsubscribePhotos = subscribeToPhotos((remotePhotos) => {
-      if (remotePhotos) {
-        setAllPhotos(remotePhotos);
+    allPhotosRef.current = allPhotos;
+  }, [allPhotos]);
+
+  // Load photos from IndexedDB immediately on startup for zero-delay offline rendering
+  useEffect(() => {
+    getAllPhotosFromDB().then((localPhotos) => {
+      if (localPhotos && localPhotos.length > 0) {
+        setAllPhotos((prev) => {
+          const map = new Map<string, PhotoRecord>();
+          prev.forEach((p) => map.set(p.id, p));
+          localPhotos.forEach((p) => {
+            if (!map.has(p.id)) map.set(p.id, p);
+          });
+          return Array.from(map.values());
+        });
       }
     });
-
-    return () => {
-      unsubscribePhotos();
-    };
   }, []);
+
+  // Merge photos into categories whenever allPhotos updates
+  useEffect(() => {
+    if (allPhotos.length === 0) return;
+    setCategories((prev) => mergePhotosIntoCategories(prev, allPhotos));
+  }, [allPhotos]);
 
   // Debounced persistence to eliminate UI blocking on frequent updates
   useEffect(() => {
@@ -1632,6 +1755,11 @@ export default function App() {
                   onBackToOverview={handleBackToOverview}
                   onOpenWhatsApp={() => setShowWhatsAppModal(true)}
                   onEditCategoryTitle={() => handleEditCategory(currentCategory)}
+                  onUpdateCategoryPeriod={(catId, newPeriod) => {
+                    const targetCat = categories.find((c) => c.id === catId) || currentCategory;
+                    const updatedCat = { ...targetCat, period: newPeriod };
+                    handleSaveEditedCategory(updatedCat);
+                  }}
                   onAddNewSite={() => setShowAddSiteModal(true)}
                   onToggleCheck={handleToggleCheck}
                   onEditSite={handleEditSite}

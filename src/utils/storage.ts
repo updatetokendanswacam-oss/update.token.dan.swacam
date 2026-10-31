@@ -81,6 +81,26 @@ export async function savePhotoToDB(photo: PhotoRecord): Promise<void> {
   }
 }
 
+export async function getAllPhotosFromDB(): Promise<PhotoRecord[]> {
+  try {
+    const db = await openPhotoDB();
+    return new Promise((resolve) => {
+      const tx = db.transaction(STORE_NAME, 'readonly');
+      const store = tx.objectStore(STORE_NAME);
+      const req = store.getAll();
+      req.onsuccess = () => {
+        const all: PhotoRecord[] = req.result || [];
+        resolve(all);
+      };
+      req.onerror = () => {
+        resolve(getPhotosFromLocal());
+      };
+    });
+  } catch {
+    return getPhotosFromLocal();
+  }
+}
+
 export async function getPhotosForSite(siteId: string): Promise<PhotoRecord[]> {
   try {
     const db = await openPhotoDB();
