@@ -18,15 +18,19 @@ export const AddSiteModal: React.FC<AddSiteModalProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!siteName.trim()) {
-      setErrorMessage('Nama Site wajib diisi');
+    if (!siteName.trim() && !siteId.trim()) {
+      setErrorMessage('Nama Site atau Site ID wajib diisi');
       return;
     }
 
+    const cleanSiteName = siteName.trim() || siteId.trim().toUpperCase();
+    const extractedCode = cleanSiteName.match(/^([A-Z0-9_-]{3,12})/i)?.[1]?.toUpperCase();
+    const cleanSiteId = siteId.trim().toUpperCase() || extractedCode || 'SITE';
+
     onAddSite({
       meterId: meterId.trim(),
-      siteId: siteId.trim().toUpperCase() || 'SITE',
-      siteName: siteName.trim(),
+      siteId: cleanSiteId,
+      siteName: cleanSiteName,
       checked: false,
       tokens: [],
       photos: [],
@@ -62,44 +66,52 @@ export const AddSiteModal: React.FC<AddSiteModalProps> = ({
             </div>
           )}
           <div>
-            <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
-              <Hash className="w-3.5 h-3.5 text-blue-600" />
-              <span>No. ID Pelanggan / Meter</span>
+            <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+              <span className="flex items-center gap-1.5">
+                <Hash className="w-3.5 h-3.5 text-blue-600" />
+                <span>No. ID Pelanggan / Meter</span>
+              </span>
+              <span className="text-[11px] font-semibold text-slate-400 font-sans uppercase">
+                (Opsional - Boleh Kosong)
+              </span>
             </label>
             <input
               type="text"
               value={meterId}
               onChange={(e) => setMeterId(e.target.value)}
-              placeholder="Contoh: 547402150841"
-              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-mono text-slate-900 focus:outline-none focus:border-blue-600 transition"
-              required
+              placeholder="Contoh: 547402150841 atau biarkan kosong"
+              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-mono text-slate-900 focus:outline-none focus:border-blue-600 transition placeholder:font-sans placeholder:text-slate-400"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
-              <Building2 className="w-3.5 h-3.5 text-indigo-600" />
-              <span>Site ID</span>
+            <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+              <span className="flex items-center gap-1.5">
+                <Building2 className="w-3.5 h-3.5 text-indigo-600" />
+                <span>Site ID</span>
+              </span>
+              <span className="text-[11px] font-semibold text-slate-400 font-sans uppercase">
+                (Opsional)
+              </span>
             </label>
             <input
               type="text"
               value={siteId}
               onChange={(e) => setSiteId(e.target.value)}
-              placeholder="Contoh: EPE134"
-              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-mono uppercase text-slate-900 focus:outline-none focus:border-blue-600 transition"
-              required
+              placeholder="Contoh: JKT781"
+              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-mono uppercase text-slate-900 focus:outline-none focus:border-blue-600 transition placeholder:font-sans placeholder:text-slate-400"
             />
           </div>
 
           <div>
             <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-1.5">
-              Nama Site Lengkap
+              Nama Site / Keterangan Lengkap
             </label>
             <textarea
               rows={3}
               value={siteName}
               onChange={(e) => setSiteName(e.target.value)}
-              placeholder="Contoh: EPE134_GGLANGGARKEBAGUSANEMRSSIAGARAYAEASYMACRO"
+              placeholder="Contoh: JKT781-TanahKoja1TBG-MACRO atau JKT727_JLRayaTiparCakungDMT-MACRO (Juned)"
               className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm text-slate-900 focus:outline-none focus:border-blue-600 transition"
               required
             />
