@@ -1,6 +1,7 @@
 import React from 'react';
 import { RotateCw, UserPlus, Users, ShieldCheck, Menu, HardDrive } from 'lucide-react';
 import { User } from '../types';
+import { useSyncStatus } from '../hooks/useSyncStatus';
 
 interface HeaderProps {
   currentUser: User;
@@ -25,6 +26,7 @@ export const Header: React.FC<HeaderProps> = React.memo(({
   isRefreshing,
   onSelectNav,
 }) => {
+  const { syncState } = useSyncStatus();
   const isAdmin = currentUser.role === 'admin';
 
   return (
@@ -66,6 +68,32 @@ export const Header: React.FC<HeaderProps> = React.memo(({
 
         {/* Right Actions */}
         <div className="flex items-center gap-2">
+          {/* Real-Time Sync Status Pill */}
+          <div
+            onClick={onRefresh}
+            title={
+              syncState === 'live'
+                ? 'Sinkronisasi Real-Time Firestore Aktif'
+                : syncState === 'connecting'
+                ? 'Sedang menghubungkan ke Database...'
+                : 'Offline — Klik untuk mencoba menghubungkan kembali'
+            }
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-bold cursor-pointer transition select-none bg-white/5 hover:bg-white/10"
+          >
+            <span
+              className={`w-2 h-2 rounded-full ${
+                syncState === 'live'
+                  ? 'bg-emerald-400 animate-pulse'
+                  : syncState === 'connecting'
+                  ? 'bg-amber-400 animate-ping'
+                  : 'bg-rose-400'
+              }`}
+            />
+            <span className="text-[10px] sm:text-[11px] font-semibold text-slate-300 uppercase tracking-wider">
+              {syncState === 'live' ? 'LIVE' : syncState === 'connecting' ? 'CONNECTING' : 'OFFLINE'}
+            </span>
+          </div>
+
           {/* Refresh Button */}
           <button
             onClick={onRefresh}

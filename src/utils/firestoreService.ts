@@ -16,6 +16,8 @@ import { db, storage } from '../firebase';
 import { UpdateCategory, User, InviteLink, PhotoRecord, SiteItem } from '../types';
 import { INITIAL_CATEGORIES, INITIAL_USERS } from './initialData';
 import { savePhotoToDB, deletePhotoFromDB } from './storage';
+import { syncManager } from './syncManager';
+import { cachePhotoUrl, invalidatePhotoCache } from './photoCache';
 
 function dataURLtoBlob(dataurl: string): Blob {
   const parts = dataurl.split(',');
@@ -300,6 +302,7 @@ export function subscribeToCategories(
   return onSnapshot(
     categoriesCol,
     async (snapshot) => {
+      syncManager.setFirestoreConnected(snapshot.metadata.fromCache);
       if (snapshot.empty) {
         try {
           await seedInitialCategories();
@@ -317,6 +320,7 @@ export function subscribeToCategories(
       onUpdate(cats);
     },
     (err) => {
+      syncManager.setFirestoreError(err);
       console.error('Firestore categories snapshot listener error:', err);
       if (onError) onError(err);
     }
@@ -439,7 +443,10 @@ export async function savePhotoPermanently(photo: PhotoRecord): Promise<PhotoRec
       const generatedPath = `photos/${photo.siteId}/${photo.id}.jpg`;
       const storageRef = ref(storage, generatedPath);
       const blob = dataURLtoBlob(photo.dataUrl);
-      await uploadBytes(storageRef, blob, { contentType: 'image/jpeg' });
+      await uploadBytes(storageRef, blob, {
+        contentType: 'image/jpeg',
+        customMetadata: { 'Cache-Control': 'public, max-age=31536000' }
+      });
       storageUrl = await getDownloadURL(storageRef);
       storagePath = generatedPath;
     } catch (err) {
@@ -477,7 +484,11 @@ export async function savePhotoPermanently(photo: PhotoRecord): Promise<PhotoRec
     dataUrl: photo.dataUrl || storageUrl,
   };
 
-  // 5. Cache in local IndexedDB for rapid offline access
+  // Cache in fast in-memory map & IndexedDB for instant zero-delay access
+  if (returnRecord.id) {
+    cachePhotoUrl(returnRecord.id, returnRecord.dataUrl || returnRecord.storageUrl || '');
+  }
+
   try {
     await savePhotoToDB(returnRecord);
   } catch (err) {
@@ -492,6 +503,9 @@ export async function savePhotoPermanently(photo: PhotoRecord): Promise<PhotoRec
  * Restricted to verified Administrator actions only.
  */
 export async function deletePhotoPermanently(photoId: string, storagePath?: string): Promise<void> {
+  // Invalidate in-memory cache
+  invalidatePhotoCache(photoId);
+
   // 1. Delete from Firestore /photos/{photoId}
   const photoDocRef = doc(db, 'photos', photoId);
   await deleteDoc(photoDocRef);
@@ -526,15 +540,21 @@ export function subscribeToPhotos(
   return onSnapshot(
     photosCol,
     (snapshot) => {
+      syncManager.setFirestoreConnected(snapshot.metadata.fromCache);
       const photoList: PhotoRecord[] = [];
       snapshot.forEach((d) => {
-        photoList.push(d.data() as PhotoRecord);
+        const p = d.data() as PhotoRecord;
+        photoList.push(p);
+        if (p.id) {
+          cachePhotoUrl(p.id, p.dataUrl || p.storageUrl || '');
+        }
       });
       // Sort newest first
       photoList.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
       onUpdate(photoList);
     },
     (err) => {
+      syncManager.setFirestoreError(err);
       console.error('Firestore photos snapshot listener error:', err);
       if (onError) onError(err);
     }

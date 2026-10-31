@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { UserPlus, Plus, Edit2, Trash2, ArrowUpRight, Check, X, Pencil } from 'lucide-react';
 import { UpdateCategory, User } from '../types';
+import { useSyncStatus } from '../hooks/useSyncStatus';
 
 interface CategoryCardItemProps {
   category: UpdateCategory;
@@ -19,6 +20,7 @@ const CategoryCardItem: React.FC<CategoryCardItemProps> = React.memo(({
   onDeleteCategory,
   onUpdateSiteCount,
 }) => {
+  const { syncState } = useSyncStatus();
   const [isEditingCount, setIsEditingCount] = useState(false);
   const [newCountInput, setNewCountInput] = useState<number>(category.sites.length);
 
@@ -79,9 +81,38 @@ const CategoryCardItem: React.FC<CategoryCardItemProps> = React.memo(({
     >
       {/* Card Header: Badge & Actions */}
       <div className="flex items-center justify-between gap-3">
-        <span className="px-3 py-1 rounded-lg bg-[#eeeffa] text-[#494c7e] text-[11px] font-bold tracking-wider uppercase">
-          {badgeText}
-        </span>
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="px-3 py-1 rounded-lg bg-[#eeeffa] text-[#494c7e] text-[11px] font-bold tracking-wider uppercase">
+            {badgeText}
+          </span>
+          {syncState === 'live' && (
+            <span
+              title="Sinkronisasi Real-Time Firestore Aktif"
+              className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200"
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              <span>LIVE</span>
+            </span>
+          )}
+          {syncState === 'connecting' && (
+            <span
+              title="Menghubungkan ke Database..."
+              className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200"
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping" />
+              <span>CONNECTING</span>
+            </span>
+          )}
+          {syncState === 'offline' && (
+            <span
+              title="Mode Offline — Data tersimpan lokal"
+              className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200"
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+              <span>OFFLINE</span>
+            </span>
+          )}
+        </div>
 
         <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
           <button

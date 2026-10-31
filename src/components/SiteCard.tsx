@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Check, X, Camera, Edit2, Trash2, Plus, CornerDownLeft, Image as ImageIcon, Eye } from 'lucide-react';
 import { SiteItem, UpdateCategory, User } from '../types';
+import { getOptimizedPhotoUrl } from '../utils/photoCache';
 
 interface SiteCardProps {
   site: SiteItem;
@@ -229,33 +230,38 @@ export const SiteCard: React.FC<SiteCardProps> = React.memo(({
             {/* Photo thumbnails with timestamp and preview */}
             {site.photos && site.photos.length > 0 ? (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 mt-2">
-                {site.photos.map((photo, idx) => (
-                  <div
-                    key={photo.id || idx}
-                    onClick={() => onViewPhoto(site, idx)}
-                    className="relative group rounded-xl overflow-hidden border border-slate-700 bg-slate-950 cursor-pointer aspect-video"
-                  >
-                    <img
-                      src={photo.storageUrl || photo.dataUrl}
-                      alt={`Foto Site ${site.siteId}`}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                      onError={(e) => {
-                        if (photo.dataUrl && e.currentTarget.src !== photo.dataUrl) {
-                          e.currentTarget.src = photo.dataUrl;
-                        }
-                      }}
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex flex-col justify-end p-1.5">
-                      <p className="text-[9px] font-bold text-yellow-300 truncate">
-                        {photo.formattedTime || 'Dokumentasi'}
-                      </p>
-                      <div className="flex items-center justify-between text-[8px] text-slate-300">
-                        <span className="truncate">{photo.capturedBy}</span>
-                        <Eye className="w-3 h-3 text-blue-300 shrink-0" />
+                {site.photos.map((photo, idx) => {
+                  const photoUrl = getOptimizedPhotoUrl(photo);
+                  return (
+                    <div
+                      key={photo.id || idx}
+                      onClick={() => onViewPhoto(site, idx)}
+                      className="relative group rounded-xl overflow-hidden border border-slate-700 bg-slate-950 cursor-pointer aspect-video"
+                    >
+                      <img
+                        src={photoUrl}
+                        alt={`Foto Site ${site.siteId}`}
+                        loading="lazy"
+                        decoding="async"
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        onError={(e) => {
+                          if (photo.dataUrl && e.currentTarget.src !== photo.dataUrl) {
+                            e.currentTarget.src = photo.dataUrl;
+                          }
+                        }}
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex flex-col justify-end p-1.5">
+                        <p className="text-[9px] font-bold text-yellow-300 truncate">
+                          {photo.formattedTime || 'Dokumentasi'}
+                        </p>
+                        <div className="flex items-center justify-between text-[8px] text-slate-300">
+                          <span className="truncate">{photo.capturedBy}</span>
+                          <Eye className="w-3 h-3 text-blue-300 shrink-0" />
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             ) : (
               <div className="flex items-center gap-2 p-2.5 rounded-xl bg-slate-950/50 border border-dashed border-slate-800 text-xs text-slate-400">
@@ -267,5 +273,21 @@ export const SiteCard: React.FC<SiteCardProps> = React.memo(({
         )}
       </div>
     </div>
+  );
+}, (prev, next) => {
+  return (
+    prev.site.id === next.site.id &&
+    prev.site.checked === next.site.checked &&
+    prev.site.checkedBy === next.site.checkedBy &&
+    prev.site.statusColor === next.site.statusColor &&
+    prev.site.siteName === next.site.siteName &&
+    prev.site.siteId === next.site.siteId &&
+    prev.site.meterId === next.site.meterId &&
+    prev.site.tokens === next.site.tokens &&
+    prev.site.photos === next.site.photos &&
+    prev.category.id === next.category.id &&
+    prev.category.allowCamera === next.category.allowCamera &&
+    prev.category.allowTokenInput === next.category.allowTokenInput &&
+    prev.category.type === next.category.type
   );
 });

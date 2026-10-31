@@ -17,6 +17,8 @@ import {
   ChevronDown
 } from 'lucide-react';
 import { UpdateCategory, SiteItem, User } from '../types';
+import { useSyncStatus } from '../hooks/useSyncStatus';
+import { getOptimizedPhotoUrl } from '../utils/photoCache';
 
 interface SiteItemCardProps {
   site: SiteItem;
@@ -257,28 +259,32 @@ const SiteItemCard: React.FC<SiteItemCardProps> = React.memo(({
                 {/* Thumbnails */}
                 {site.photos && site.photos.length > 0 && (
                   <div className="flex items-center gap-2 mt-2 overflow-x-auto pb-1">
-                    {site.photos.map((photo, pIdx) => (
-                      <div
-                        key={photo.id || pIdx}
-                        onClick={() => onViewPhoto(site, pIdx)}
-                        className="relative group shrink-0 w-20 h-14 rounded-lg overflow-hidden border border-slate-200 cursor-pointer bg-slate-100"
-                      >
-                        <img
-                          src={photo.storageUrl || photo.dataUrl}
-                          alt="Foto Meter"
-                          loading="lazy"
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                          onError={(e) => {
-                            if (photo.dataUrl && e.currentTarget.src !== photo.dataUrl) {
-                              e.currentTarget.src = photo.dataUrl;
-                            }
-                          }}
-                        />
-                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white">
-                          <Eye className="w-3.5 h-3.5" />
+                    {site.photos.map((photo, pIdx) => {
+                      const photoUrl = getOptimizedPhotoUrl(photo);
+                      return (
+                        <div
+                          key={photo.id || pIdx}
+                          onClick={() => onViewPhoto(site, pIdx)}
+                          className="relative group shrink-0 w-20 h-14 rounded-lg overflow-hidden border border-slate-200 cursor-pointer bg-slate-100"
+                        >
+                          <img
+                            src={photoUrl}
+                            alt="Foto Meter"
+                            loading="lazy"
+                            decoding="async"
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                            onError={(e) => {
+                              if (photo.dataUrl && e.currentTarget.src !== photo.dataUrl) {
+                                e.currentTarget.src = photo.dataUrl;
+                              }
+                            }}
+                          />
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white">
+                            <Eye className="w-3.5 h-3.5" />
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -316,6 +322,22 @@ const SiteItemCard: React.FC<SiteItemCardProps> = React.memo(({
       </div>
     </div>
   );
+}, (prev, next) => {
+  return (
+    prev.site.id === next.site.id &&
+    prev.site.checked === next.site.checked &&
+    prev.site.checkedBy === next.site.checkedBy &&
+    prev.site.statusColor === next.site.statusColor &&
+    prev.site.siteName === next.site.siteName &&
+    prev.site.siteId === next.site.siteId &&
+    prev.site.meterId === next.site.meterId &&
+    prev.site.tokens === next.site.tokens &&
+    prev.site.photos === next.site.photos &&
+    prev.isAdmin === next.isAdmin &&
+    prev.isSwacam === next.isSwacam &&
+    prev.isStandbyTeam === next.isStandbyTeam &&
+    prev.showCamera === next.showCamera
+  );
 });
 
 interface CategoryDetailViewProps {
@@ -351,6 +373,7 @@ export const CategoryDetailView: React.FC<CategoryDetailViewProps> = React.memo(
   onViewPhoto,
   onUpdateStatusColor,
 }) => {
+  const { syncState } = useSyncStatus();
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'unchecked' | 'checked'>('all');
   const [displayLimit, setDisplayLimit] = useState(35);
@@ -440,6 +463,33 @@ export const CategoryDetailView: React.FC<CategoryDetailViewProps> = React.memo(
           <span className="inline-block px-3 py-1 rounded-lg bg-[#eeeffa] text-[#494c7e] text-[11px] font-bold tracking-wider uppercase">
             {badgeText}
           </span>
+          {syncState === 'live' && (
+            <span
+              title="Sinkronisasi Real-Time Firestore Aktif"
+              className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200"
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              <span>LIVE</span>
+            </span>
+          )}
+          {syncState === 'connecting' && (
+            <span
+              title="Menghubungkan ke Database..."
+              className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200"
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping" />
+              <span>CONNECTING</span>
+            </span>
+          )}
+          {syncState === 'offline' && (
+            <span
+              title="Mode Offline — Data tersimpan lokal"
+              className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200"
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+              <span>OFFLINE</span>
+            </span>
+          )}
           {!isAdmin && (
             <span className="inline-block px-2.5 py-0.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] font-bold">
               ✓ Izin Akses: Ceklis, Silang & Share WA

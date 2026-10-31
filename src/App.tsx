@@ -41,6 +41,7 @@ import {
 } from './utils/firestoreService';
 import { INITIAL_CATEGORIES, INITIAL_USERS } from './utils/initialData';
 import { savePhotoToPhoneGallery } from './utils/galleryService';
+import { syncManager } from './utils/syncManager';
 import { Header } from './components/Header';
 import { Sidebar } from './components/Sidebar';
 import { OfflineBanner } from './components/OfflineBanner';
@@ -751,17 +752,11 @@ export default function App() {
         return { ...cat, sites };
       });
 
-      saveCategories(updated);
-
-      // Non-blocking async background sync to Firestore
-      setTimeout(() => {
-        const affectedCategories = updated.filter((c) => affectedCatIds.has(c.id));
-        for (const cat of affectedCategories) {
-          saveCategoryToFirestore(cat).catch((err) =>
-            console.warn('Firestore toggle check sync notice:', err)
-          );
-        }
-      }, 0);
+      // Instantly queue debounced background sync to Firestore
+      const affectedCategories = updated.filter((c) => affectedCatIds.has(c.id));
+      for (const cat of affectedCategories) {
+        syncManager.queueCategorySave(cat);
+      }
 
       return updated;
     });
@@ -811,16 +806,11 @@ export default function App() {
         return { ...cat, sites };
       });
 
-      saveCategories(updated);
-
-      setTimeout(() => {
-        const affectedCategories = updated.filter((c) => affectedCatIds.has(c.id));
-        for (const cat of affectedCategories) {
-          saveCategoryToFirestore(cat).catch((err) =>
-            console.warn('Firestore status color update notice:', err)
-          );
-        }
-      }, 0);
+      // Instantly queue debounced background sync to Firestore
+      const affectedCategories = updated.filter((c) => affectedCatIds.has(c.id));
+      for (const cat of affectedCategories) {
+        syncManager.queueCategorySave(cat);
+      }
 
       return updated;
     });
@@ -874,15 +864,11 @@ export default function App() {
         return { ...cat, sites };
       });
 
-      saveCategories(updated);
-
-      setTimeout(() => {
-        updated.forEach((c) => {
-          if (affectedCatIds.has(c.id)) {
-            saveCategoryToFirestore(c).catch((e) => console.error('Token sync error:', e));
-          }
-        });
-      }, 0);
+      // Instantly queue debounced background sync to Firestore
+      const affectedCategories = updated.filter((c) => affectedCatIds.has(c.id));
+      for (const cat of affectedCategories) {
+        syncManager.queueCategorySave(cat);
+      }
 
       return updated;
     });
@@ -936,15 +922,11 @@ export default function App() {
         return { ...cat, sites };
       });
 
-      saveCategories(updated);
-
-      setTimeout(() => {
-        updated.forEach((c) => {
-          if (affectedCatIds.has(c.id)) {
-            saveCategoryToFirestore(c).catch((e) => console.error('Token removal sync error:', e));
-          }
-        });
-      }, 0);
+      // Instantly queue debounced background sync to Firestore
+      const affectedCategories = updated.filter((c) => affectedCatIds.has(c.id));
+      for (const cat of affectedCategories) {
+        syncManager.queueCategorySave(cat);
+      }
 
       return updated;
     });
@@ -1049,11 +1031,9 @@ export default function App() {
             return { ...cat, sites };
           });
 
-          saveCategories(updated);
-
           updated.forEach((c) => {
             if (affectedCatIds.has(c.id)) {
-              saveCategoryToFirestore(c).catch((e) => console.error('Category photo sync notice:', e));
+              syncManager.queueCategorySave(c, true);
             }
           });
 
