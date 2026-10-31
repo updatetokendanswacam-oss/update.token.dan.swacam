@@ -85,23 +85,7 @@ export const WhatsAppModal: React.FC<WhatsAppModalProps> = ({
 
     const listLines = category.sites.map((site) => {
       const icon = site.checked ? '✅' : '❌';
-      const cleanSiteName = site.siteName ? site.siteName.trim() : site.siteId;
-
-      if (isNeteco) {
-        let line = `${icon}${cleanSiteName}`;
-        if (site.tokens && site.tokens.length > 0) {
-          const tokensFormatted = site.tokens
-            .map((t) => t.trim().replace(/^#\s*/, ''))
-            .filter((t) => t.length > 0)
-            .join('\n');
-          if (tokensFormatted) {
-            line += `\n${tokensFormatted}`;
-          }
-        }
-        return line;
-      }
-
-      const meterStr = site.meterId && site.meterId.trim() !== '' && site.meterId.trim() !== '-' ? site.meterId.trim() : '';
+      const cleanSiteName = site.siteName ? site.siteName.trim() : '';
       const cleanSiteId = site.siteId ? site.siteId.trim().toUpperCase() : '';
 
       let nameDisplay = '-';
@@ -116,6 +100,22 @@ export const WhatsAppModal: React.FC<WhatsAppModalProps> = ({
       } else if (cleanSiteId) {
         nameDisplay = cleanSiteId;
       }
+
+      if (isNeteco) {
+        let line = `${icon}${nameDisplay}`;
+        if (site.tokens && site.tokens.length > 0) {
+          const tokensFormatted = site.tokens
+            .map((t) => t.trim().replace(/^#\s*/, ''))
+            .filter((t) => t.length > 0)
+            .join('\n');
+          if (tokensFormatted) {
+            line += `\n${tokensFormatted}`;
+          }
+        }
+        return line;
+      }
+
+      const meterStr = site.meterId && site.meterId.trim() !== '' && site.meterId.trim() !== '-' ? site.meterId.trim() : '';
 
       let line = '';
       if (meterStr) {
