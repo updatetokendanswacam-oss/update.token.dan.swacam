@@ -255,13 +255,14 @@ export default function App() {
             };
           });
 
-          // Retain newly added local categories only if they are genuinely pending upload
+          // Retain local categories if not yet in Firestore snapshot and not deleted by user
           for (const localCat of prevCategories) {
             if (deletedCategoryIdsRef.current.has(localCat.id)) {
               continue; // Do not restore categories deleted by the user
             }
-            if (pendingCategoryIdsRef.current.has(localCat.id) && !merged.some((c) => c.id === localCat.id)) {
+            if (!merged.some((c) => c.id === localCat.id)) {
               merged.push(localCat);
+              saveCategoryToFirestore(localCat).catch(() => {});
             }
           }
 

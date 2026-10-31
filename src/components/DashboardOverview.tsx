@@ -265,9 +265,9 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = React.memo(({
           submitted terhitung otomatis untuk setiap periode.
         </p>
 
-        {/* Action Buttons: Undang user & Periode baru (Hanya Admin) */}
-        {isAdmin && (
-          <div className="flex items-center gap-3 pt-2">
+        {/* Action Buttons: Undang user (Admin) & Periode baru (Semua User) */}
+        <div className="flex items-center gap-3 pt-2">
+          {isAdmin && (
             <button
               onClick={onOpenInviteModal}
               className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-sm font-semibold shadow-xs transition active:scale-95 cursor-pointer"
@@ -275,16 +275,16 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = React.memo(({
               <UserPlus className="w-4 h-4 text-slate-500" />
               <span>Undang user</span>
             </button>
+          )}
 
-            <button
-              onClick={onOpenAddCategoryModal}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#1e2238] hover:bg-[#2b304f] text-white text-sm font-semibold shadow-md transition active:scale-95 cursor-pointer"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Periode baru</span>
-            </button>
-          </div>
-        )}
+          <button
+            onClick={onOpenAddCategoryModal}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#1e2238] hover:bg-[#2b304f] text-white text-sm font-semibold shadow-md transition active:scale-95 cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Periode baru</span>
+          </button>
+        </div>
       </div>
 
       {/* Category Cards List */}

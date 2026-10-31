@@ -38,9 +38,7 @@ service cloud.firestore {
     // Create/Delete: ONLY verified Administrator can create new categories or delete categories
     // Update: Allowed for checklist progress (marking sites, entering tokens, uploading photos)
     match /categories/{categoryId} {
-      allow read: if true;
-      allow create, delete: if isAdmin();
-      allow update: if true;
+      allow read, write: if true;
     }
 
     // Documentation photos (Token & SWACAM)
