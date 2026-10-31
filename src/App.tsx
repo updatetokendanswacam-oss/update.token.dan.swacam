@@ -12,6 +12,8 @@ import {
   savePhotoToDB,
   deletePhotoFromDB,
   recordNameLogin,
+  loadDeletedCategoryIds,
+  saveDeletedCategoryIds,
 } from './utils/storage';
 import {
   User,
@@ -75,7 +77,7 @@ export default function App() {
   const [invites, setInvites] = useState<InviteLink[]>(() => loadInvites());
 
   // Ref to track deleted category IDs and prevent snapshot listener from restoring them
-  const deletedCategoryIdsRef = React.useRef<Set<string>>(new Set());
+  const deletedCategoryIdsRef = React.useRef<Set<string>>(loadDeletedCategoryIds());
   const pendingCategoryIdsRef = React.useRef<Set<string>>(new Set());
 
   // Navigation tab: 'dashboard' (Beranda) | 'settings' (Pengaturan)
@@ -234,7 +236,10 @@ export default function App() {
         });
 
         setCategories((prevCategories) => {
-          const merged = fixedCats.map((remoteCat) => {
+          const deletedIds = deletedCategoryIdsRef.current;
+          const activeRemote = fixedCats.filter((c) => !deletedIds.has(c.id));
+
+          const merged = activeRemote.map((remoteCat) => {
             // Once confirmed in Firestore snapshot, remove from pending creates
             pendingCategoryIdsRef.current.delete(remoteCat.id);
 
@@ -245,7 +250,6 @@ export default function App() {
                 return pending;
               }
               // 2. Otherwise, adopt the authoritative Firestore record directly!
-              // This guarantees instant, reliable sync across all Admin & User accounts.
               return remoteSite;
             });
 
@@ -255,14 +259,13 @@ export default function App() {
             };
           });
 
-          // Retain local categories if not yet in Firestore snapshot and not deleted by user
+          // Retain local categories ONLY if genuinely pending upload AND not deleted
           for (const localCat of prevCategories) {
-            if (deletedCategoryIdsRef.current.has(localCat.id)) {
+            if (deletedIds.has(localCat.id)) {
               continue; // Do not restore categories deleted by the user
             }
-            if (!merged.some((c) => c.id === localCat.id)) {
+            if (pendingCategoryIdsRef.current.has(localCat.id) && !merged.some((c) => c.id === localCat.id)) {
               merged.push(localCat);
-              saveCategoryToFirestore(localCat).catch(() => {});
             }
           }
 
@@ -1291,8 +1294,9 @@ export default function App() {
       const catId = deleteModalState.category.id;
       const catTitle = deleteModalState.category.title;
 
-      // 1. Track deleted category ID so snapshot listener never restores it
+      // 1. Track deleted category ID permanently in ref & localStorage so snapshot listener never restores it
       deletedCategoryIdsRef.current.add(catId);
+      saveDeletedCategoryIds(deletedCategoryIdsRef.current);
       pendingCategoryIdsRef.current.delete(catId);
 
       // 2. Optimistic update: Update React state & localStorage instantly

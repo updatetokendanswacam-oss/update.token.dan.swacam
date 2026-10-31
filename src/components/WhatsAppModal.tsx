@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { X, Copy, Check, Share2, MessageSquare } from 'lucide-react';
+import { X, Copy, Check, Share2, MessageSquare, Calendar, RefreshCw } from 'lucide-react';
 import { UpdateCategory } from '../types';
+import { getRealTimeWIBDateString } from './AddCategoryModal';
 
 interface WhatsAppModalProps {
   category: UpdateCategory;
@@ -12,6 +13,11 @@ export const WhatsAppModal: React.FC<WhatsAppModalProps> = ({
   onClose,
 }) => {
   const [copied, setCopied] = useState(false);
+  const [periodInput, setPeriodInput] = useState<string>(() => {
+    return category.period && category.period.trim() !== ''
+      ? category.period.trim()
+      : getRealTimeWIBDateString();
+  });
 
   const totalSites = category.sites.length;
   const checkedSites = category.sites.filter((s) => s.checked).length;
@@ -26,7 +32,7 @@ export const WhatsAppModal: React.FC<WhatsAppModalProps> = ({
     const isStandby = category.type === 'standby_team' || category.title.toLowerCase().includes('standby') || category.title.toLowerCase().includes('jadwal');
 
     const titleLine = category.title ? category.title.trim() : 'Update List – DEPOTEL';
-    const periodLine = category.period ? category.period.trim() : 'Bulan Oktober 2026';
+    const periodLine = periodInput.trim() || getRealTimeWIBDateString();
 
     if (isStandby) {
       // Group by siteId (e.g. JAKTIM 1, JAKTIM 2)
@@ -71,18 +77,22 @@ export const WhatsAppModal: React.FC<WhatsAppModalProps> = ({
 
     let header = '';
     if (isNeteco) {
-      // Calculate integer percentage if whole number, e.g. 71%
       const percentageInt = totalSites > 0 ? Math.round((checkedSites / totalSites) * 100) : 0;
-      header = `${titleLine}\n${periodLine}\nJumlah Site NETECO : ${totalSites}\nSubmitted NETECO : ${percentageInt}%\n==============================`;
+      header = `${titleLine}\n${periodLine}\nJumlah Site NETECO : ${totalSites}\n✅ Sudah Tercentang :\n❌ Belum Tercentang :\n📊 Submitted NETECO : ${percentageInt}%\n____________________________________\n`;
     } else {
-      header = `${titleLine}\n${periodLine}\nJumlah Tiket Site : ${totalSites} Site\n✅ Sudah Tercentang : ${checkedSites} Site\n❌ Belum Tercentang : ${uncheckedSites} Site\n📊 Submitted : ${percentage}%\n=================================`;
+      header = `${titleLine}\n${periodLine}\nJumlah Tiket Site : ${totalSites} Site\n✅ Sudah Tercentang : ${checkedSites} Site\n❌ Belum Tercentang : ${uncheckedSites} Site\n📊 Submitted : ${percentage}%\n=================================\n`;
     }
 
     const listLines = category.sites.map((site) => {
       const icon = site.checked ? '✅' : '❌';
+      const cleanSiteName = site.siteName ? site.siteName.trim() : site.siteId;
+
+      if (isNeteco) {
+        return `${icon}${cleanSiteName}`;
+      }
+
       const meterStr = site.meterId && site.meterId.trim() !== '' && site.meterId.trim() !== '-' ? site.meterId.trim() : '';
       const cleanSiteId = site.siteId ? site.siteId.trim().toUpperCase() : '';
-      const cleanSiteName = site.siteName ? site.siteName.trim() : '';
 
       let nameDisplay = '-';
       if (cleanSiteId && cleanSiteName) {
@@ -157,16 +167,41 @@ export const WhatsAppModal: React.FC<WhatsAppModalProps> = ({
           </button>
         </div>
 
+        {/* Date / Period Setting (Real-Time WIB & Manual) */}
+        <div className="mt-3 p-3 bg-slate-50 border border-slate-200 rounded-2xl flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 text-xs">
+          <div className="flex items-center gap-2 flex-1 min-w-0">
+            <Calendar className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span className="font-bold text-slate-700 shrink-0">Hari/Tanggal:</span>
+            <input
+              type="text"
+              value={periodInput}
+              onChange={(e) => setPeriodInput(e.target.value)}
+              placeholder="Contoh: Hari Sabtu - 31 Oktober 2026"
+              className="flex-1 px-2.5 py-1.5 rounded-lg border border-slate-300 font-semibold text-slate-900 bg-white focus:outline-none focus:border-emerald-600"
+            />
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setPeriodInput(getRealTimeWIBDateString())}
+            className="px-3 py-1.5 rounded-lg bg-emerald-100 hover:bg-emerald-200 text-emerald-800 text-[11px] font-bold flex items-center justify-center gap-1 transition cursor-pointer shrink-0"
+            title="Suntikkan Tanggal WIB Real-Time Kalender"
+          >
+            <RefreshCw className="w-3 h-3" />
+            <span>Real-Time WIB</span>
+          </button>
+        </div>
+
         {/* Text Preview */}
-        <div className="my-4 flex-1 overflow-y-auto">
-          <pre className="p-4 rounded-2xl bg-slate-50 border border-slate-200 text-xs sm:text-sm font-mono text-slate-800 whitespace-pre-wrap leading-relaxed select-all">
+        <div className="my-3 flex-1 overflow-y-auto">
+          <pre className="p-4 rounded-2xl bg-slate-900 text-emerald-300 text-xs sm:text-sm font-mono whitespace-pre-wrap leading-relaxed select-all border border-slate-800">
             {whatsappText}
           </pre>
         </div>
 
         {/* Footer Actions */}
         <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3">
-          <span className="text-xs text-slate-500">
+          <span className="text-xs text-slate-500 font-medium">
             Total {totalSites} Site • {checkedSites} Selesai • {uncheckedSites} Belum
           </span>
           <div className="flex items-center gap-2">
@@ -191,3 +226,4 @@ export const WhatsAppModal: React.FC<WhatsAppModalProps> = ({
     </div>
   );
 };
+

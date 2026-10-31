@@ -161,21 +161,26 @@ export function loadCategories(): UpdateCategory[] {
       saveCategories(INITIAL_CATEGORIES);
       return INITIAL_CATEGORIES;
     }
+    const deletedIds = loadDeletedCategoryIds();
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed) || parsed.length === 0) {
-      saveCategories(INITIAL_CATEGORIES);
-      return INITIAL_CATEGORIES;
+      const initial = INITIAL_CATEGORIES.filter((c) => !deletedIds.has(c.id));
+      saveCategories(initial);
+      return initial;
     }
-    const updated = parsed.map((cat: UpdateCategory) => {
-      if (cat.id === 'cat-token-depotel' || cat.title.toLowerCase().includes('swfm')) {
-        return { ...cat, allowCamera: true };
-      }
-      return cat;
-    });
+    const updated = parsed
+      .filter((cat: UpdateCategory) => !deletedIds.has(cat.id))
+      .map((cat: UpdateCategory) => {
+        if (cat.id === 'cat-token-depotel' || cat.title.toLowerCase().includes('swfm')) {
+          return { ...cat, allowCamera: true };
+        }
+        return cat;
+      });
     return updated;
   } catch (e) {
     console.error('Error loading categories:', e);
-    return INITIAL_CATEGORIES;
+    const deletedIds = loadDeletedCategoryIds();
+    return INITIAL_CATEGORIES.filter((c) => !deletedIds.has(c.id));
   }
 }
 
@@ -550,6 +555,28 @@ export function getSavedOfficerNames(): string[] {
     return raw ? JSON.parse(raw) : [];
   } catch {
     return [];
+  }
+}
+
+// Persistent Deleted Category Tracker to permanently prevent list resurrection
+const DELETED_CATEGORY_IDS_KEY = 'depotel_deleted_category_ids_v1';
+
+export function loadDeletedCategoryIds(): Set<string> {
+  try {
+    const raw = localStorage.getItem(DELETED_CATEGORY_IDS_KEY);
+    if (!raw) return new Set();
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? new Set(arr) : new Set();
+  } catch {
+    return new Set();
+  }
+}
+
+export function saveDeletedCategoryIds(deletedIds: Set<string>): void {
+  try {
+    localStorage.setItem(DELETED_CATEGORY_IDS_KEY, JSON.stringify(Array.from(deletedIds)));
+  } catch (e) {
+    console.error('Error saving deleted category ids:', e);
   }
 }
 
