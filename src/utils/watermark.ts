@@ -1,69 +1,122 @@
-/**
- * Helper to fetch device Geolocation coordinates for watermarking.
- * Returns formatted Alamat Site & GPS coordinates (or registered site address if GPS unavailable).
- */
-export async function getDeviceGeolocationString(siteId: string, siteName: string): Promise<string> {
-  const cleanId = siteId ? siteId.trim() : '-';
-  const cleanName = siteName ? siteName.trim() : '-';
-  const siteAddressLabel = `${cleanName} (${cleanId})`;
+import { reverseGeocode } from './geocodingService';
 
-  if (typeof window === 'undefined' || !('geolocation' in navigator)) {
-    return siteAddressLabel;
-  }
-
-  try {
-    const pos = await new Promise<GeolocationPosition | null>((resolve) => {
-      const timeout = setTimeout(() => resolve(null), 2500);
-      navigator.geolocation.getCurrentPosition(
-        (p) => {
-          clearTimeout(timeout);
-          resolve(p);
-        },
-        () => {
-          clearTimeout(timeout);
-          resolve(null);
-        },
-        { enableHighAccuracy: true, timeout: 2500, maximumAge: 10000 }
-      );
-    });
-
-    if (pos && pos.coords) {
-      const lat = pos.coords.latitude.toFixed(6);
-      const lng = pos.coords.longitude.toFixed(6);
-      const acc = pos.coords.accuracy ? ` (±${Math.round(pos.coords.accuracy)}m)` : '';
-      return `${siteAddressLabel} | GPS: ${lat}, ${lng}${acc}`;
-    }
-  } catch (err) {
-    console.warn('Geolocation lookup notice:', err);
-  }
-
-  return siteAddressLabel;
+export interface GeotagDetails {
+  address: string;
+  latitude: string;
+  longitude: string;
+  accuracy?: string;
+  formattedDate: string;
+  formattedTime: string;
+  operatorName: string;
+  siteName: string;
+  siteId: string;
+  rawText?: string;
 }
 
 /**
- * Resolves the official operational brand watermark title based on the active list / category:
- * - List "Pengisian Token Listrik Manual – DEPOTEL" -> "DEPOTEL GROUP - TOKEN MANUAL"
- * - List "Update Swacam/Catat Meter – DEPOTEL" -> "DEPOTEL GROUP - SWACAM"
+ * Retrieves device GPS coordinates and reverse geocodes them into full address details.
+ */
+export async function getDeviceGeolocationDetails(
+  siteId: string,
+  siteName: string,
+  registeredAddress?: string
+): Promise<GeotagDetails> {
+  const cleanId = siteId ? siteId.trim() : '-';
+  const cleanName = siteName ? siteName.trim() : '-';
+  const defaultSiteDisplay = `${cleanName} (${cleanId})`;
+
+  const now = new Date();
+  const months = [
+    'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+    'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+  ];
+  const day = String(now.getDate()).padStart(2, '0');
+  const month = months[now.getMonth()];
+  const year = now.getFullYear();
+  const hours = String(now.getHours()).padStart(2, '0');
+  const minutes = String(now.getMinutes()).padStart(2, '0');
+  const seconds = String(now.getSeconds()).padStart(2, '0');
+
+  const formattedDate = `${day} ${month} ${year}`;
+  const formattedTime = `${hours}:${minutes}:${seconds} WIB`;
+
+  let latStr = '-';
+  let lngStr = '-';
+  let accStr = '';
+  let fullAddress = registeredAddress || `Site ${defaultSiteDisplay}`;
+
+  if (typeof window !== 'undefined' && 'geolocation' in navigator) {
+    try {
+      const pos = await new Promise<GeolocationPosition | null>((resolve) => {
+        const timeout = setTimeout(() => resolve(null), 3500);
+        navigator.geolocation.getCurrentPosition(
+          (p) => {
+            clearTimeout(timeout);
+            resolve(p);
+          },
+          () => {
+            clearTimeout(timeout);
+            resolve(null);
+          },
+          { enableHighAccuracy: true, timeout: 3500, maximumAge: 5000 }
+        );
+      });
+
+      if (pos && pos.coords) {
+        latStr = pos.coords.latitude.toFixed(6);
+        lngStr = pos.coords.longitude.toFixed(6);
+        if (pos.coords.accuracy) {
+          accStr = ` (±${Math.round(pos.coords.accuracy)}m)`;
+        }
+        // Perform reverse geocoding
+        const geoAddr = await reverseGeocode(pos.coords.latitude, pos.coords.longitude);
+        if (geoAddr && !geoAddr.includes('tidak dapat dimuat')) {
+          fullAddress = geoAddr;
+        } else if (registeredAddress) {
+          fullAddress = `${registeredAddress} (GPS: ${latStr}, ${lngStr})`;
+        } else {
+          fullAddress = `Site ${defaultSiteDisplay} (GPS: ${latStr}, ${lngStr})`;
+        }
+      }
+    } catch (err) {
+      console.warn('Geolocation lookup notice:', err);
+    }
+  }
+
+  return {
+    address: fullAddress,
+    latitude: latStr !== '-' ? `${latStr}${accStr}` : '-',
+    longitude: lngStr,
+    formattedDate,
+    formattedTime,
+    operatorName: '-',
+    siteName: cleanName,
+    siteId: cleanId,
+    rawText: `Alamat: ${fullAddress} | Lat: ${latStr} | Lng: ${lngStr}`
+  };
+}
+
+/**
+ * Helper to fetch device Geolocation coordinates string for backward compatibility.
+ */
+export async function getDeviceGeolocationString(siteId: string, siteName: string): Promise<string> {
+  const details = await getDeviceGeolocationDetails(siteId, siteName);
+  return `${details.address} (Lat: ${details.latitude}, Lng: ${details.longitude})`;
+}
+
+/**
+ * Resolves the official operational brand watermark title based on the active list / category.
  */
 export function getPhotoWatermarkBrand(categoryTitleOrType?: string): string {
   if (!categoryTitleOrType) return 'DEPOTEL GROUP - SWACAM';
   const lower = categoryTitleOrType.toLowerCase().trim();
 
-  // Specifically check for NETECO / UNMON
-  if (
-    lower.includes('neteco') ||
-    lower.includes('unmon') ||
-    lower === 'neteco_unmon'
-  ) {
+  if (lower.includes('neteco') || lower.includes('unmon') || lower === 'neteco_unmon') {
     return 'DEPOTEL GROUP - NETECO UNMON';
   }
-
-  // Specifically check for Token SWFM list
   if (lower.includes('swfm')) {
     return 'DEPOTEL GROUP - TOKEN SWFM';
   }
-
-  // Specifically check for Token Manual list
   if (
     lower.includes('token manual') ||
     lower.includes('token listrik manual') ||
@@ -72,34 +125,28 @@ export function getPhotoWatermarkBrand(categoryTitleOrType?: string): string {
   ) {
     return 'DEPOTEL GROUP - TOKEN MANUAL';
   }
-
-  // Specifically check for Swacam / Catat Meter list
-  if (
-    lower.includes('swacam') ||
-    lower.includes('catat meter') ||
-    lower === 'swacam'
-  ) {
+  if (lower.includes('swacam') || lower.includes('catat meter') || lower === 'swacam') {
     return 'DEPOTEL GROUP - SWACAM';
   }
-
-  // Fallback for any other token list
   if (lower.includes('token')) {
     return 'DEPOTEL GROUP - TOKEN MANUAL';
   }
-
-  // If already prefixed with DEPOTEL GROUP
   if (categoryTitleOrType.toUpperCase().startsWith('DEPOTEL GROUP - ')) {
     return categoryTitleOrType.toUpperCase();
   }
-
   return `DEPOTEL GROUP - ${categoryTitleOrType.toUpperCase()}`;
 }
 
 /**
- * Adds official DEPOTEL operational watermark with Site ID, Site Name, Meter ID, Geotag Location, Timestamp & Operator.
- * The brand header dynamically reflects the active list:
- * - "DEPOTEL GROUP - TOKEN MANUAL" for Pengisian Token Listrik Manual – DEPOTEL
- * - "DEPOTEL GROUP - SWACAM" for Update Swacam/Catat Meter – DEPOTEL
+ * Adds official DEPOTEL operational watermark with strict GEOTAG LOCATION formatting:
+ * GEOTAG LOCATION
+ * Alamat: [Alamat lengkap hasil GPS]
+ * Latitude: [Koordinat Latitude]
+ * Longitude: [Koordinat Longitude]
+ * Tanggal: [Tanggal WIB]
+ * Waktu: [Waktu WIB]
+ * Petugas: [Nama user]
+ * Site: [Nama site]
  */
 export async function addDepotelWatermark(
   imageSource: File | Blob | string,
@@ -108,10 +155,12 @@ export async function addDepotelWatermark(
   meterId: string,
   operatorName: string,
   categoryTitleOrType?: string,
-  customGeotag?: string
+  customGeotag?: string,
+  geotagDetailsParam?: GeotagDetails
 ): Promise<{ dataUrl: string; formattedTime: string; brandTitle: string; geotag: string }> {
   const brandTitle = getPhotoWatermarkBrand(categoryTitleOrType);
-  const geotagText = customGeotag || (await getDeviceGeolocationString(siteId, siteName));
+  const geoDetails = geotagDetailsParam || (await getDeviceGeolocationDetails(siteId, siteName));
+  geoDetails.operatorName = operatorName || geoDetails.operatorName;
 
   return new Promise((resolve, reject) => {
     let objectUrlToRevoke: string | null = null;
@@ -167,20 +216,53 @@ export async function addDepotelWatermark(
         const minutes = String(now.getMinutes()).padStart(2, '0');
         const seconds = String(now.getSeconds()).padStart(2, '0');
 
-        const formattedDate = `${day} ${month} ${year}`;
-        const formattedTimeOnly = `${hours}:${minutes}:${seconds} WIB`;
-        const fullTimeString = `${formattedDate}, ${formattedTimeOnly}`;
+        const dateStr = geoDetails.formattedDate || `${day} ${month} ${year}`;
+        const timeStr = geoDetails.formattedTime || `${hours}:${minutes}:${seconds} WIB`;
+        const fullTimeString = `${dateStr}, ${timeStr}`;
 
         // Scale factors relative to canvas width
         const baseWidth = Math.max(canvas.width, 800);
         const scale = baseWidth / 1000;
-        const bannerHeight = Math.max(136 * scale, 115);
+        
+        // Multi-line address wrapping logic
+        const subFontSize = Math.max(Math.round(13.5 * scale), 11.5);
+        const fontStack = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.font = `600 ${subFontSize}px ${fontStack}`;
+
+        const maxTextWidth = canvas.width - (40 * scale);
+        const addressPrefix = 'Alamat: ';
+        const rawAddressText = customGeotag || geoDetails.address;
+        
+        // Wrap address if it exceeds max width
+        const addressWords = rawAddressText.split(' ');
+        const addressLines: string[] = [];
+        let currentLine = addressPrefix;
+
+        for (let i = 0; i < addressWords.length; i++) {
+          const testLine = currentLine + (currentLine === addressPrefix ? '' : ' ') + addressWords[i];
+          const testWidth = ctx.measureText(testLine).width;
+          if (testWidth > maxTextWidth && i > 0) {
+            addressLines.push(currentLine);
+            currentLine = '   ' + addressWords[i];
+          } else {
+            currentLine = testLine;
+          }
+        }
+        if (currentLine) {
+          addressLines.push(currentLine);
+        }
+
+        // Calculate total banner height dynamically based on number of address lines
+        const lineStep = 18 * scale;
+        const totalAddressHeight = addressLines.length * lineStep;
+        const fixedContentHeight = (135 * scale); // Header, Lat/Lng, Date/Time, Petugas, Site, Brand
+        const bannerHeight = Math.max(fixedContentHeight + totalAddressHeight, 185);
 
         // Gradient dark overlay banner at bottom
         const bannerY = canvas.height - bannerHeight;
         const gradient = ctx.createLinearGradient(0, bannerY, 0, canvas.height);
-        gradient.addColorStop(0, 'rgba(11, 43, 103, 0.88)');
-        gradient.addColorStop(1, 'rgba(5, 18, 44, 0.96)');
+        gradient.addColorStop(0, 'rgba(11, 25, 60, 0.92)');
+        gradient.addColorStop(1, 'rgba(4, 12, 32, 0.98)');
         ctx.fillStyle = gradient;
         ctx.fillRect(0, bannerY, canvas.width, bannerHeight);
 
@@ -189,46 +271,57 @@ export async function addDepotelWatermark(
         ctx.fillRect(0, bannerY, canvas.width, Math.max(4 * scale, 3));
 
         // Watermark Text styling
-        const titleFontSize = Math.max(Math.round(20 * scale), 16);
-        const subFontSize = Math.max(Math.round(14 * scale), 12);
-        const smallFontSize = Math.max(Math.round(12.5 * scale), 10.5);
+        const titleFontSize = Math.max(Math.round(18 * scale), 15);
+        const headerGeoFontSize = Math.max(Math.round(15 * scale), 13);
+        const valueFontSize = Math.max(Math.round(13 * scale), 11);
 
         const paddingLeft = Math.max(20 * scale, 16);
         let currentY = bannerY + (22 * scale);
 
-        // Line 1: Header Brand (Dynamic based on active list)
-        ctx.font = `bold ${titleFontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
-        ctx.fillStyle = '#FFFFFF';
-        ctx.fillText(brandTitle, paddingLeft, currentY);
+        // Line 1: GEOTAG LOCATION + Brand Badge
+        ctx.font = `bold ${headerGeoFontSize}px ${fontStack}`;
+        ctx.fillStyle = '#38BDF8';
+        ctx.fillText('📍 GEOTAG LOCATION', paddingLeft, currentY);
 
-        // Line 2: Site ID & Site Name
-        currentY += (22 * scale);
-        ctx.font = `600 ${subFontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+        ctx.font = `bold ${titleFontSize}px ${fontStack}`;
         ctx.fillStyle = '#FDE047';
-        const siteDisplay = `SITE: ${siteId} - ${siteName}`;
-        ctx.fillText(siteDisplay, paddingLeft, currentY);
+        const brandTextWidth = ctx.measureText(brandTitle).width;
+        ctx.fillText(brandTitle, canvas.width - paddingLeft - brandTextWidth, currentY);
 
-        // Line 3: Meter ID & Operator
-        currentY += (19 * scale);
-        ctx.font = `500 ${smallFontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
-        ctx.fillStyle = '#E2E8F0';
-        ctx.fillText(`ID Pelanggan/Meter: ${meterId || '-'}  |  Petugas: ${operatorName}`, paddingLeft, currentY);
+        // Line 2+: Alamat
+        ctx.font = `600 ${subFontSize}px ${fontStack}`;
+        ctx.fillStyle = '#FFFFFF';
+        for (const line of addressLines) {
+          currentY += lineStep;
+          ctx.fillText(line, paddingLeft, currentY);
+        }
 
-        // Line 4: Geotag Coordinates & Location
-        currentY += (18 * scale);
-        ctx.font = `600 ${smallFontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+        // Line 3: Latitude & Longitude
+        currentY += (20 * scale);
+        ctx.font = `600 ${valueFontSize}px ${fontStack}`;
         ctx.fillStyle = '#A7F3D0';
-        ctx.fillText(`📍 Geotag: ${geotagText}`, paddingLeft, currentY);
+        const latLngStr = `Latitude: ${geoDetails.latitude}   |   Longitude: ${geoDetails.longitude}`;
+        ctx.fillText(latLngStr, paddingLeft, currentY);
 
-        // Line 5: Timestamp (Date & Time)
+        // Line 4: Tanggal & Waktu (WIB)
         currentY += (18 * scale);
-        ctx.font = `600 ${smallFontSize}px monospace`;
+        ctx.font = `600 ${valueFontSize}px ${fontStack}`;
         ctx.fillStyle = '#67E8F9';
-        ctx.fillText(`🕒 Waktu: ${fullTimeString}`, paddingLeft, currentY);
+        const dateTimeStr = `Tanggal: ${dateStr}   |   Waktu: ${timeStr}`;
+        ctx.fillText(dateTimeStr, paddingLeft, currentY);
 
-        // Quality 0.76 provides ultra-crisp output at ~90KB size for 3x faster network delivery
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.76);
-        resolve({ dataUrl, formattedTime: fullTimeString, brandTitle, geotag: geotagText });
+        // Line 5: Petugas & Site
+        currentY += (18 * scale);
+        ctx.font = `600 ${valueFontSize}px ${fontStack}`;
+        ctx.fillStyle = '#F472B6';
+        const displaySite = siteName ? `${siteName} (${siteId || '-'})` : (siteId || '-');
+        const petugasSiteStr = `Petugas: ${operatorName || '-'}   |   Site: ${displaySite}`;
+        ctx.fillText(petugasSiteStr, paddingLeft, currentY);
+
+        const summaryGeotag = `Alamat: ${rawAddressText} | Lat: ${geoDetails.latitude} | Lng: ${geoDetails.longitude} | Petugas: ${operatorName} | Site: ${displaySite}`;
+
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.80);
+        resolve({ dataUrl, formattedTime: fullTimeString, brandTitle, geotag: summaryGeotag });
       } catch (err) {
         if (objectUrlToRevoke) URL.revokeObjectURL(objectUrlToRevoke);
         reject(err);

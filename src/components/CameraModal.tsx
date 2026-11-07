@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { Camera, Upload, X, Check, RefreshCw, AlertCircle, Loader2, CloudUpload } from 'lucide-react';
+import { Camera, Upload, X, Check, RefreshCw, AlertCircle, Loader2, CloudUpload, MapPin } from 'lucide-react';
 import { SiteItem, User, PhotoRecord, UpdateCategory } from '../types';
-import { addDepotelWatermark, getPhotoWatermarkBrand } from '../utils/watermark';
+import { addDepotelWatermark, getPhotoWatermarkBrand, getDeviceGeolocationDetails, GeotagDetails } from '../utils/watermark';
 
 interface CameraModalProps {
   site: SiteItem;
@@ -24,6 +24,7 @@ export const CameraModal: React.FC<CameraModalProps> = ({
   const [useLiveCamera, setUseLiveCamera] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [previewWatermarked, setPreviewWatermarked] = useState<{ dataUrl: string; formattedTime: string; brandTitle: string; geotag: string } | null>(null);
+  const [geotagDetails, setGeotagDetails] = useState<GeotagDetails | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
 
   // Uploading / saving state
@@ -75,10 +76,40 @@ export const CameraModal: React.FC<CameraModalProps> = ({
     setUseLiveCamera(false);
   };
 
-  const captureLiveFrame = async () => {
-    if (!videoRef.current) return;
+  const processImageWithWatermark = async (imageSource: File | Blob | string) => {
     setIsProcessing(true);
     setUploadError(null);
+    try {
+      // Obtain GPS coordinates & reverse geocoded address
+      const geoDetails = await getDeviceGeolocationDetails(
+        site.siteId,
+        site.siteName,
+        (site as any).alamat || (site as any).address
+      );
+      geoDetails.operatorName = currentUser?.name || 'Petugas';
+      setGeotagDetails(geoDetails);
+
+      const watermarked = await addDepotelWatermark(
+        imageSource,
+        site.siteId,
+        site.siteName,
+        site.meterId,
+        currentUser?.name || 'Petugas',
+        brandTitle,
+        undefined,
+        geoDetails
+      );
+      setPreviewWatermarked(watermarked);
+    } catch (err) {
+      console.error('Error processing photo watermark:', err);
+      setCameraError('Gagal memproses gambar dan geotag. Silakan coba kembali.');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const captureLiveFrame = async () => {
+    if (!videoRef.current) return;
     try {
       const video = videoRef.current;
       const canvas = document.createElement('canvas');
@@ -88,47 +119,19 @@ export const CameraModal: React.FC<CameraModalProps> = ({
       if (ctx) {
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
         const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
-        const watermarked = await addDepotelWatermark(
-          dataUrl,
-          site.siteId,
-          site.siteName,
-          site.meterId,
-          currentUser?.name || 'Petugas',
-          brandTitle
-        );
-        setPreviewWatermarked(watermarked);
+        await processImageWithWatermark(dataUrl);
         stopCamera();
       }
     } catch (err) {
       console.error('Error capturing live frame:', err);
       setCameraError('Gagal mengambil frame foto kamera.');
-    } finally {
-      setIsProcessing(false);
     }
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
-    setIsProcessing(true);
-    setUploadError(null);
-    try {
-      const watermarked = await addDepotelWatermark(
-        file,
-        site.siteId,
-        site.siteName,
-        site.meterId,
-        currentUser?.name || 'Petugas',
-        brandTitle
-      );
-      setPreviewWatermarked(watermarked);
-    } catch (err) {
-      console.error('Error processing uploaded file:', err);
-      setCameraError('Gagal memproses gambar. Silakan coba kembali.');
-    } finally {
-      setIsProcessing(false);
-    }
+    await processImageWithWatermark(file);
   };
 
   const handleConfirmSave = async () => {
@@ -231,20 +234,40 @@ export const CameraModal: React.FC<CameraModalProps> = ({
                 </div>
               )}
 
-              <div className="p-3 rounded-xl bg-blue-950/40 border border-blue-800/50 text-xs text-blue-200 space-y-1">
-                <p className="font-semibold text-emerald-400 flex items-center gap-1.5">
-                  <Check className="w-4 h-4" />
-                  <span>Foto & Geotag berhasil distempel ({brandTitle}):</span>
-                </p>
-                <p className="text-slate-300">
-                  📍 Geotag: <strong className="text-emerald-300">{previewWatermarked.geotag}</strong>
-                </p>
-                <p className="text-slate-300">
-                  Waktu: <strong>{previewWatermarked.formattedTime}</strong>
-                </p>
-                <p className="text-slate-300">
-                  Petugas: <strong>{currentUser?.name || 'Petugas'}</strong>
-                </p>
+              <div className="p-3.5 rounded-2xl bg-slate-950/80 border border-blue-500/30 text-xs text-slate-200 space-y-2 shadow-inner">
+                <div className="flex items-center justify-between pb-1.5 border-b border-slate-800">
+                  <span className="font-bold text-sky-400 flex items-center gap-1.5 text-xs">
+                    <MapPin className="w-3.5 h-3.5 text-sky-400" />
+                    GEOTAG LOCATION AUTOMATIC
+                  </span>
+                  <span className="text-[10px] font-semibold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                    GPS & Reverse Geocoded
+                  </span>
+                </div>
+                {geotagDetails ? (
+                  <div className="space-y-1 font-mono text-[11px] leading-relaxed">
+                    <p className="text-white font-sans text-xs font-medium">
+                      <strong className="text-slate-400 font-normal">Alamat: </strong>
+                      {geotagDetails.address}
+                    </p>
+                    <div className="grid grid-cols-2 gap-x-2 text-slate-300 pt-1 border-t border-slate-800/80">
+                      <p><strong className="text-slate-400">Latitude:</strong> {geotagDetails.latitude}</p>
+                      <p><strong className="text-slate-400">Longitude:</strong> {geotagDetails.longitude}</p>
+                    </div>
+                    <div className="grid grid-cols-2 gap-x-2 text-slate-300">
+                      <p><strong className="text-slate-400">Tanggal:</strong> {geotagDetails.formattedDate}</p>
+                      <p><strong className="text-slate-400">Waktu:</strong> {geotagDetails.formattedTime}</p>
+                    </div>
+                    <div className="grid grid-cols-2 gap-x-2 text-slate-300">
+                      <p><strong className="text-slate-400">Petugas:</strong> {currentUser?.name || 'Petugas'}</p>
+                      <p><strong className="text-slate-400">Site:</strong> {site.siteName}</p>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-slate-300 text-xs truncate">
+                    📍 Geotag: <strong className="text-emerald-300">{previewWatermarked.geotag}</strong>
+                  </p>
+                )}
               </div>
             </div>
           ) : useLiveCamera ? (
