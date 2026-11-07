@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   ArrowLeft,
   MessageSquare,
@@ -16,12 +16,13 @@ import {
   PlusSquare,
   ChevronDown,
   Calendar,
-  RefreshCw
+  RefreshCw,
+  Clock
 } from 'lucide-react';
 import { UpdateCategory, SiteItem, User } from '../types';
 import { useSyncStatus } from '../hooks/useSyncStatus';
 import { getOptimizedPhotoUrl } from '../utils/photoCache';
-import { getRealTimeWIBDateString } from './AddCategoryModal';
+import { getRealTimeWIBDateString, getRealTimeWIBDateTimeString } from './AddCategoryModal';
 
 interface SiteItemCardProps {
   site: SiteItem;
@@ -434,6 +435,17 @@ export const CategoryDetailView: React.FC<CategoryDetailViewProps> = React.memo(
   const isSwacam = category.type === 'swacam';
   const isTokenManual = category.type === 'token_manual';
   const isNeteco = category.type === 'neteco_unmon' || category.title.toLowerCase().includes('neteco');
+
+  // Real-time ticking WIB clock for NETECO UNMON category
+  const [liveWibTime, setLiveWibTime] = useState(() => getRealTimeWIBDateTimeString());
+
+  useEffect(() => {
+    if (!isNeteco) return;
+    const timer = setInterval(() => {
+      setLiveWibTime(getRealTimeWIBDateTimeString());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [isNeteco]);
   const isStandbyTeam = category.type === 'standby_team' || category.title.toLowerCase().includes('standby') || category.title.toLowerCase().includes('jadwal');
   const isCustom = category.type === 'custom';
   const badgeText = category.customTypeName
@@ -640,15 +652,16 @@ export const CategoryDetailView: React.FC<CategoryDetailViewProps> = React.memo(
               ) : (
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                      Hari & Tanggal NETECO:
+                    <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1">
+                      <Clock className="w-3.5 h-3.5 text-emerald-600 animate-pulse" />
+                      JAM & WAKTU REAL-TIME (WIB):
                     </span>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                      Real-Time WIB / Kalender Klik
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
+                      Real-Time WIB / Kalender
                     </span>
                   </div>
-                  <p className="text-sm sm:text-base font-extrabold text-slate-900 mt-0.5 truncate">
-                    {category.period || getRealTimeWIBDateString()}
+                  <p className="text-sm sm:text-base font-extrabold text-slate-900 mt-0.5 truncate font-mono">
+                    {category.period && !category.period.startsWith('Hari') ? category.period : liveWibTime}
                   </p>
                 </div>
               )}

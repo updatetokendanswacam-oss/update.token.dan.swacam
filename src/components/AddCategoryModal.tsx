@@ -22,7 +22,32 @@ export function getRealTimeWIBDateString(): string {
     const formatted = new Intl.DateTimeFormat('id-ID', options).format(now);
     return `Hari ${formatted.replace(',', ' -')}`;
   } catch {
-    return 'Hari Sabtu - 31 Oktober 2026';
+    return 'Hari Sabtu - 7 November 2026';
+  }
+}
+
+export function getRealTimeWIBDateTimeString(): string {
+  try {
+    const now = new Date();
+    const dateOptions: Intl.DateTimeFormatOptions = {
+      timeZone: 'Asia/Jakarta',
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+    };
+    const timeOptions: Intl.DateTimeFormatOptions = {
+      timeZone: 'Asia/Jakarta',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+    };
+    const dateFormatted = new Intl.DateTimeFormat('id-ID', dateOptions).format(now);
+    const timeFormatted = new Intl.DateTimeFormat('id-ID', timeOptions).format(now);
+    return `Hari ${dateFormatted.replace(',', ' -')} • ${timeFormatted} WIB`;
+  } catch {
+    return 'Hari Sabtu - 7 November 2026 • 14:02:15 WIB';
   }
 }
 
