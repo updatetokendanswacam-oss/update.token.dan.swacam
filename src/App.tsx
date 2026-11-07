@@ -584,11 +584,11 @@ export default function App() {
       const remotePhotos = await loadAllPhotosFromFirestore();
       if (remotePhotos && remotePhotos.length > 0) {
         setAllPhotos(remotePhotos);
+        setCategories((prev) => mergePhotosIntoCategories(prev, remotePhotos));
       }
     } catch (err) {
       console.warn('Refresh photo sync notice:', err);
     }
-    setCategories(loadCategories());
     setUsers(loadUsers());
     
     // Check for Service Worker / Vercel updates in background
