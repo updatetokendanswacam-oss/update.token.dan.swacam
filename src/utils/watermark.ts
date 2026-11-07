@@ -138,7 +138,7 @@ export function getPhotoWatermarkBrand(categoryTitleOrType?: string): string {
 }
 
 /**
- * Adds official DEPOTEL operational watermark with strict GEOTAG LOCATION formatting:
+ * Adds official DEPOTEL operational watermark with ENLARGED (+25-30%) GEOTAG LOCATION formatting:
  * GEOTAG LOCATION
  * Alamat: [Alamat lengkap hasil GPS]
  * Latitude: [Koordinat Latitude]
@@ -223,13 +223,17 @@ export async function addDepotelWatermark(
         // Scale factors relative to canvas width
         const baseWidth = Math.max(canvas.width, 800);
         const scale = baseWidth / 1000;
-        
-        // Multi-line address wrapping logic
-        const subFontSize = Math.max(Math.round(13.5 * scale), 11.5);
-        const fontStack = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-        ctx.font = `600 ${subFontSize}px ${fontStack}`;
 
-        const maxTextWidth = canvas.width - (40 * scale);
+        // Enlarged (+25-30%) Watermark Typography sizes
+        const titleFontSize = Math.max(Math.round(23 * scale), 18);
+        const headerGeoFontSize = Math.max(Math.round(19 * scale), 16);
+        const subFontSize = Math.max(Math.round(17 * scale), 14);
+        const valueFontSize = Math.max(Math.round(16 * scale), 13);
+        const fontStack = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+
+        ctx.font = `bold ${subFontSize}px ${fontStack}`;
+
+        const maxTextWidth = canvas.width - (44 * scale);
         const addressPrefix = 'Alamat: ';
         const rawAddressText = customGeotag || geoDetails.address;
         
@@ -252,31 +256,26 @@ export async function addDepotelWatermark(
           addressLines.push(currentLine);
         }
 
-        // Calculate total banner height dynamically based on number of address lines
-        const lineStep = 18 * scale;
+        // Calculate total banner height dynamically based on enlarged font and address lines
+        const lineStep = Math.max(Math.round(22 * scale), 18);
         const totalAddressHeight = addressLines.length * lineStep;
-        const fixedContentHeight = (135 * scale); // Header, Lat/Lng, Date/Time, Petugas, Site, Brand
-        const bannerHeight = Math.max(fixedContentHeight + totalAddressHeight, 185);
+        const fixedContentHeight = Math.max(Math.round(165 * scale), 140); // Header, Lat/Lng, Date/Time, Petugas, Site, Brand
+        const bannerHeight = Math.max(fixedContentHeight + totalAddressHeight, 220);
 
         // Gradient dark overlay banner at bottom
         const bannerY = canvas.height - bannerHeight;
         const gradient = ctx.createLinearGradient(0, bannerY, 0, canvas.height);
-        gradient.addColorStop(0, 'rgba(11, 25, 60, 0.92)');
-        gradient.addColorStop(1, 'rgba(4, 12, 32, 0.98)');
+        gradient.addColorStop(0, 'rgba(10, 22, 50, 0.94)');
+        gradient.addColorStop(1, 'rgba(3, 10, 26, 0.98)');
         ctx.fillStyle = gradient;
         ctx.fillRect(0, bannerY, canvas.width, bannerHeight);
 
         // Red Accent stripe
         ctx.fillStyle = '#E11D48';
-        ctx.fillRect(0, bannerY, canvas.width, Math.max(4 * scale, 3));
+        ctx.fillRect(0, bannerY, canvas.width, Math.max(4 * scale, 3.5));
 
-        // Watermark Text styling
-        const titleFontSize = Math.max(Math.round(18 * scale), 15);
-        const headerGeoFontSize = Math.max(Math.round(15 * scale), 13);
-        const valueFontSize = Math.max(Math.round(13 * scale), 11);
-
-        const paddingLeft = Math.max(20 * scale, 16);
-        let currentY = bannerY + (22 * scale);
+        const paddingLeft = Math.max(22 * scale, 18);
+        let currentY = bannerY + (26 * scale);
 
         // Line 1: GEOTAG LOCATION + Brand Badge
         ctx.font = `bold ${headerGeoFontSize}px ${fontStack}`;
@@ -288,31 +287,31 @@ export async function addDepotelWatermark(
         const brandTextWidth = ctx.measureText(brandTitle).width;
         ctx.fillText(brandTitle, canvas.width - paddingLeft - brandTextWidth, currentY);
 
-        // Line 2+: Alamat
-        ctx.font = `600 ${subFontSize}px ${fontStack}`;
+        // Line 2+: Alamat (Enlarged White Text)
+        ctx.font = `bold ${subFontSize}px ${fontStack}`;
         ctx.fillStyle = '#FFFFFF';
         for (const line of addressLines) {
           currentY += lineStep;
           ctx.fillText(line, paddingLeft, currentY);
         }
 
-        // Line 3: Latitude & Longitude
-        currentY += (20 * scale);
-        ctx.font = `600 ${valueFontSize}px ${fontStack}`;
-        ctx.fillStyle = '#A7F3D0';
+        // Line 3: Latitude & Longitude (Enlarged Mint Green)
+        currentY += (24 * scale);
+        ctx.font = `bold ${valueFontSize}px ${fontStack}`;
+        ctx.fillStyle = '#6EE7B7';
         const latLngStr = `Latitude: ${geoDetails.latitude}   |   Longitude: ${geoDetails.longitude}`;
         ctx.fillText(latLngStr, paddingLeft, currentY);
 
-        // Line 4: Tanggal & Waktu (WIB)
-        currentY += (18 * scale);
-        ctx.font = `600 ${valueFontSize}px ${fontStack}`;
+        // Line 4: Tanggal & Waktu WIB (Enlarged Bright Cyan)
+        currentY += (22 * scale);
+        ctx.font = `bold ${valueFontSize}px ${fontStack}`;
         ctx.fillStyle = '#67E8F9';
         const dateTimeStr = `Tanggal: ${dateStr}   |   Waktu: ${timeStr}`;
         ctx.fillText(dateTimeStr, paddingLeft, currentY);
 
-        // Line 5: Petugas & Site
-        currentY += (18 * scale);
-        ctx.font = `600 ${valueFontSize}px ${fontStack}`;
+        // Line 5: Petugas & Site (Enlarged Pink)
+        currentY += (22 * scale);
+        ctx.font = `bold ${valueFontSize}px ${fontStack}`;
         ctx.fillStyle = '#F472B6';
         const displaySite = siteName ? `${siteName} (${siteId || '-'})` : (siteId || '-');
         const petugasSiteStr = `Petugas: ${operatorName || '-'}   |   Site: ${displaySite}`;
@@ -320,7 +319,8 @@ export async function addDepotelWatermark(
 
         const summaryGeotag = `Alamat: ${rawAddressText} | Lat: ${geoDetails.latitude} | Lng: ${geoDetails.longitude} | Petugas: ${operatorName} | Site: ${displaySite}`;
 
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.80);
+        // Compress at quality 0.74 (~160KB) to ensure super fast upload and guaranteed fit in Firestore
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.74);
         resolve({ dataUrl, formattedTime: fullTimeString, brandTitle, geotag: summaryGeotag });
       } catch (err) {
         if (objectUrlToRevoke) URL.revokeObjectURL(objectUrlToRevoke);

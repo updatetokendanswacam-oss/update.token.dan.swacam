@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X, Download, Trash2, Shield, Clock, User as UserIcon, AlertTriangle, Loader2, CheckCircle2 } from 'lucide-react';
 import { SiteItem, User, PhotoRecord } from '../types';
 import { getPhotoWatermarkBrand } from '../utils/watermark';
+import { getOptimizedPhotoUrl } from '../utils/photoCache';
 
 interface PhotoGalleryModalProps {
   site: SiteItem;
@@ -33,7 +34,7 @@ export const PhotoGalleryModal: React.FC<PhotoGalleryModalProps> = ({
     return null;
   }
 
-  const imageUrl = activePhoto.storageUrl || activePhoto.dataUrl;
+  const imageUrl = getOptimizedPhotoUrl(activePhoto) || activePhoto.dataUrl || activePhoto.storageUrl;
 
   const handleDownload = () => {
     if (!imageUrl) return;

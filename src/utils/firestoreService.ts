@@ -368,7 +368,7 @@ export async function saveCategoryToFirestore(category: UpdateCategory): Promise
       meterId: p.meterId || s.meterId || '',
       storageUrl: p.storageUrl || '',
       storagePath: p.storagePath || '',
-      dataUrl: p.storageUrl ? '' : (p.dataUrl || ''),
+      dataUrl: p.dataUrl || p.storageUrl || '',
       timestamp: p.timestamp || new Date().toISOString(),
       capturedBy: p.capturedBy || '',
       capturedById: p.capturedById || '',
@@ -376,6 +376,7 @@ export async function saveCategoryToFirestore(category: UpdateCategory): Promise
       categoryType: p.categoryType,
       categoryTitle: p.categoryTitle || '',
       brandTitle: p.brandTitle || '',
+      geotag: p.geotag || '',
     })),
   }));
 
@@ -428,7 +429,6 @@ export async function saveInviteToFirestore(invite: InviteLink): Promise<void> {
 /**
  * Saves a documentation photo permanently to Firebase Cloud Storage and Firestore.
  * Ensures the photo is uploaded, referenced with permanent storage URL, and saved to /photos/{photoId}.
- * Strips huge Base64 payload from Firestore write to ensure lightning-fast database saves (<150ms).
  */
 export async function savePhotoPermanently(photo: PhotoRecord): Promise<PhotoRecord> {
   if (!photo.id) {
@@ -464,13 +464,12 @@ export async function savePhotoPermanently(photo: PhotoRecord): Promise<PhotoRec
     }
   }
 
-  // 2. Prepare lightweight record for Firestore to guarantee instant writes (<30ms)
+  // 2. Prepare full record for Firestore to guarantee reload persistence
   const firestoreRecord: PhotoRecord = {
     ...photo,
     storageUrl: storageUrl || photo.storageUrl || '',
     storagePath: storagePath || photo.storagePath || '',
-    // Strip Base64 dataUrl from Firestore document when storageUrl exists
-    dataUrl: storageUrl ? '' : (photo.dataUrl || ''),
+    dataUrl: photo.dataUrl || storageUrl || '',
     createdAt: photo.createdAt || new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
