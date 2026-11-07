@@ -369,7 +369,7 @@ interface CategoryDetailViewProps {
   category: UpdateCategory;
   currentUser: User | null;
   onBackToOverview: () => void;
-  onOpenWhatsApp: () => void;
+  onOpenWhatsApp: (filter?: 'all' | 'unchecked' | 'checked') => void;
   onEditCategoryTitle: () => void;
   onUpdateCategoryPeriod?: (categoryId: string, newPeriod: string) => Promise<void> | void;
   onAddNewSite: () => void;
@@ -733,7 +733,7 @@ export const CategoryDetailView: React.FC<CategoryDetailViewProps> = React.memo(
           {/* Kirim WhatsApp */}
           <button
             type="button"
-            onClick={onOpenWhatsApp}
+            onClick={() => onOpenWhatsApp('all')}
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-sm font-semibold shadow-xs transition active:scale-95 cursor-pointer"
           >
             <MessageSquare className="w-4 h-4 text-emerald-600" />
@@ -778,10 +778,21 @@ export const CategoryDetailView: React.FC<CategoryDetailViewProps> = React.memo(
         </div>
 
         {/* Card 2: SUDAH TERCENTANG */}
-        <div className="bg-white rounded-2xl border border-slate-200/80 p-4 sm:p-5 shadow-xs">
-          <div className="flex items-center gap-1.5 text-slate-400 text-[11px] font-bold uppercase tracking-wider">
-            <Check className="w-3.5 h-3.5 text-emerald-600 stroke-[3]" />
-            <span>SUDAH TERCENTANG</span>
+        <div className="bg-white rounded-2xl border border-slate-200/80 p-4 sm:p-5 shadow-xs relative group">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5 text-slate-400 text-[11px] font-bold uppercase tracking-wider">
+              <Check className="w-3.5 h-3.5 text-emerald-600 stroke-[3]" />
+              <span>SUDAH TERCENTANG</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => onOpenWhatsApp('checked')}
+              className="px-2 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-[10px] font-bold flex items-center gap-1 transition cursor-pointer"
+              title="Kirim WA khusus daftar Sudah Tercentang"
+            >
+              <MessageSquare className="w-3 h-3 text-emerald-600" />
+              <span>WA</span>
+            </button>
           </div>
           <div className="mt-2 text-2xl sm:text-3xl font-extrabold text-emerald-600">
             {checkedSites}
@@ -789,10 +800,21 @@ export const CategoryDetailView: React.FC<CategoryDetailViewProps> = React.memo(
         </div>
 
         {/* Card 3: BELUM TERCENTANG */}
-        <div className="bg-white rounded-2xl border border-slate-200/80 p-4 sm:p-5 shadow-xs">
-          <div className="flex items-center gap-1.5 text-slate-400 text-[11px] font-bold uppercase tracking-wider">
-            <X className="w-3.5 h-3.5 text-red-500 stroke-[3]" />
-            <span>BELUM TERCENTANG</span>
+        <div className="bg-white rounded-2xl border border-slate-200/80 p-4 sm:p-5 shadow-xs relative group">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5 text-slate-400 text-[11px] font-bold uppercase tracking-wider">
+              <X className="w-3.5 h-3.5 text-red-500 stroke-[3]" />
+              <span>BELUM TERCENTANG</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => onOpenWhatsApp('unchecked')}
+              className="px-2 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 text-[10px] font-bold flex items-center gap-1 transition cursor-pointer"
+              title="Kirim WA khusus daftar Belum Tercentang"
+            >
+              <MessageSquare className="w-3 h-3 text-rose-600" />
+              <span>WA</span>
+            </button>
           </div>
           <div className="mt-2 text-2xl sm:text-3xl font-extrabold text-red-500">
             {uncheckedSites}
@@ -854,6 +876,28 @@ export const CategoryDetailView: React.FC<CategoryDetailViewProps> = React.memo(
         >
           Sudah Tercentang ({checkedSites})
         </button>
+
+        {statusFilter === 'unchecked' && (
+          <button
+            onClick={() => onOpenWhatsApp('unchecked')}
+            className="px-3 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 text-xs font-bold transition cursor-pointer whitespace-nowrap flex items-center gap-1.5"
+            title="Kirim ke WhatsApp khusus list Belum Tercentang"
+          >
+            <MessageSquare className="w-3.5 h-3.5 text-rose-600" />
+            <span>Kirim WA Belum Tercentang ({uncheckedSites})</span>
+          </button>
+        )}
+
+        {statusFilter === 'checked' && (
+          <button
+            onClick={() => onOpenWhatsApp('checked')}
+            className="px-3 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-700 text-xs font-bold transition cursor-pointer whitespace-nowrap flex items-center gap-1.5"
+            title="Kirim ke WhatsApp khusus list Sudah Tercentang"
+          >
+            <MessageSquare className="w-3.5 h-3.5 text-emerald-600" />
+            <span>Kirim WA Sudah Tercentang ({checkedSites})</span>
+          </button>
+        )}
       </div>
 
       {/* Search Bar */}

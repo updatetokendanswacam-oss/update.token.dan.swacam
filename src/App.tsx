@@ -231,6 +231,7 @@ export default function App() {
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [showAccountSettings, setShowAccountSettings] = useState(false);
   const [showWhatsAppModal, setShowWhatsAppModal] = useState(false);
+  const [whatsAppFilter, setWhatsAppFilter] = useState<'all' | 'unchecked' | 'checked'>('all');
   const [showExportModal, setShowExportModal] = useState(false);
   const [showAddSiteModal, setShowAddSiteModal] = useState(false);
   const [showAddCategoryModal, setShowAddCategoryModal] = useState(false);
@@ -1080,6 +1081,7 @@ export default function App() {
 
           updated.forEach((c) => {
             if (affectedCatIds.has(c.id)) {
+              saveCategoryToFirestore(c).catch((e) => console.warn('Direct category photo save notice:', e));
               syncManager.queueCategorySave(c, true);
             }
           });
@@ -1753,7 +1755,10 @@ export default function App() {
                   category={currentCategory}
                   currentUser={currentUser}
                   onBackToOverview={handleBackToOverview}
-                  onOpenWhatsApp={() => setShowWhatsAppModal(true)}
+                  onOpenWhatsApp={(filter = 'all') => {
+                    setWhatsAppFilter(filter);
+                    setShowWhatsAppModal(true);
+                  }}
                   onEditCategoryTitle={() => handleEditCategory(currentCategory)}
                   onUpdateCategoryPeriod={(catId, newPeriod) => {
                     const targetCat = categories.find((c) => c.id === catId) || currentCategory;
@@ -1955,6 +1960,7 @@ export default function App() {
           {showWhatsAppModal && currentCategory && (
             <WhatsAppModal
               category={currentCategory}
+              initialFilter={whatsAppFilter}
               onClose={() => setShowWhatsAppModal(false)}
             />
           )}

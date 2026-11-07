@@ -23,7 +23,7 @@ export const CameraModal: React.FC<CameraModalProps> = ({
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [useLiveCamera, setUseLiveCamera] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
-  const [previewWatermarked, setPreviewWatermarked] = useState<{ dataUrl: string; formattedTime: string; brandTitle: string } | null>(null);
+  const [previewWatermarked, setPreviewWatermarked] = useState<{ dataUrl: string; formattedTime: string; brandTitle: string; geotag: string } | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
 
   // Uploading / saving state
@@ -193,8 +193,8 @@ export const CameraModal: React.FC<CameraModalProps> = ({
           {isProcessing ? (
             <div className="py-12 flex flex-col items-center justify-center gap-3">
               <RefreshCw className="w-8 h-8 text-blue-400 animate-spin" />
-              <p className="text-sm font-semibold text-slate-300">Menempelkan Watermark {brandTitle}...</p>
-              <p className="text-xs text-slate-400">Site ID, Meter ID, Tanggal & Jam WIB</p>
+              <p className="text-sm font-semibold text-slate-300">Menempelkan Watermark & Geotag {brandTitle}...</p>
+              <p className="text-xs text-slate-400">Site ID, Geotag Lokasi, Meter ID, Tanggal & Jam WIB</p>
             </div>
           ) : previewWatermarked ? (
             /* Preview with Watermark */
@@ -221,12 +221,15 @@ export const CameraModal: React.FC<CameraModalProps> = ({
                 </div>
               )}
 
-              <div className="p-3 rounded-xl bg-blue-950/40 border border-blue-800/50 text-xs text-blue-200">
+              <div className="p-3 rounded-xl bg-blue-950/40 border border-blue-800/50 text-xs text-blue-200 space-y-1">
                 <p className="font-semibold text-emerald-400 flex items-center gap-1.5">
                   <Check className="w-4 h-4" />
-                  <span>Foto berhasil distempel ({brandTitle}):</span>
+                  <span>Foto & Geotag berhasil distempel ({brandTitle}):</span>
                 </p>
-                <p className="mt-1 text-slate-300">
+                <p className="text-slate-300">
+                  📍 Geotag: <strong className="text-emerald-300">{previewWatermarked.geotag}</strong>
+                </p>
+                <p className="text-slate-300">
                   Waktu: <strong>{previewWatermarked.formattedTime}</strong>
                 </p>
                 <p className="text-slate-300">

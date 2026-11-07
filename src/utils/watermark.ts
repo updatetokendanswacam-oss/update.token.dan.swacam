@@ -1,4 +1,42 @@
 /**
+ * Helper to fetch device Geolocation coordinates for watermarking.
+ * Returns formatted Lat, Lng coordinates or falls back to site info if location is unavailable.
+ */
+export async function getDeviceGeolocationString(siteId: string, siteName: string): Promise<string> {
+  if (typeof window === 'undefined' || !('geolocation' in navigator)) {
+    return `Site ${siteId} (${siteName})`;
+  }
+
+  try {
+    const pos = await new Promise<GeolocationPosition | null>((resolve) => {
+      const timeout = setTimeout(() => resolve(null), 2500);
+      navigator.geolocation.getCurrentPosition(
+        (p) => {
+          clearTimeout(timeout);
+          resolve(p);
+        },
+        () => {
+          clearTimeout(timeout);
+          resolve(null);
+        },
+        { enableHighAccuracy: true, timeout: 2500, maximumAge: 10000 }
+      );
+    });
+
+    if (pos && pos.coords) {
+      const lat = pos.coords.latitude.toFixed(6);
+      const lng = pos.coords.longitude.toFixed(6);
+      const acc = pos.coords.accuracy ? ` (±${Math.round(pos.coords.accuracy)}m)` : '';
+      return `${lat}, ${lng}${acc} - Site ${siteId}`;
+    }
+  } catch (err) {
+    console.warn('Geolocation lookup notice:', err);
+  }
+
+  return `Site ${siteId} (${siteName})`;
+}
+
+/**
  * Resolves the official operational brand watermark title based on the active list / category:
  * - List "Pengisian Token Listrik Manual – DEPOTEL" -> "DEPOTEL GROUP - TOKEN MANUAL"
  * - List "Update Swacam/Catat Meter – DEPOTEL" -> "DEPOTEL GROUP - SWACAM"
@@ -54,7 +92,7 @@ export function getPhotoWatermarkBrand(categoryTitleOrType?: string): string {
 }
 
 /**
- * Adds official DEPOTEL operational watermark with Site ID, Site Name, Meter ID, Timestamp & Operator.
+ * Adds official DEPOTEL operational watermark with Site ID, Site Name, Meter ID, Geotag Location, Timestamp & Operator.
  * The brand header dynamically reflects the active list:
  * - "DEPOTEL GROUP - TOKEN MANUAL" for Pengisian Token Listrik Manual – DEPOTEL
  * - "DEPOTEL GROUP - SWACAM" for Update Swacam/Catat Meter – DEPOTEL
@@ -65,9 +103,11 @@ export async function addDepotelWatermark(
   siteName: string,
   meterId: string,
   operatorName: string,
-  categoryTitleOrType?: string
-): Promise<{ dataUrl: string; formattedTime: string; brandTitle: string }> {
+  categoryTitleOrType?: string,
+  customGeotag?: string
+): Promise<{ dataUrl: string; formattedTime: string; brandTitle: string; geotag: string }> {
   const brandTitle = getPhotoWatermarkBrand(categoryTitleOrType);
+  const geotagText = customGeotag || (await getDeviceGeolocationString(siteId, siteName));
 
   return new Promise((resolve, reject) => {
     let objectUrlToRevoke: string | null = null;
@@ -130,7 +170,7 @@ export async function addDepotelWatermark(
         // Scale factors relative to canvas width
         const baseWidth = Math.max(canvas.width, 800);
         const scale = baseWidth / 1000;
-        const bannerHeight = Math.max(120 * scale, 100);
+        const bannerHeight = Math.max(136 * scale, 115);
 
         // Gradient dark overlay banner at bottom
         const bannerY = canvas.height - bannerHeight;
@@ -146,11 +186,11 @@ export async function addDepotelWatermark(
 
         // Watermark Text styling
         const titleFontSize = Math.max(Math.round(20 * scale), 16);
-        const subFontSize = Math.max(Math.round(15 * scale), 12);
-        const smallFontSize = Math.max(Math.round(13 * scale), 11);
+        const subFontSize = Math.max(Math.round(14 * scale), 12);
+        const smallFontSize = Math.max(Math.round(12.5 * scale), 10.5);
 
         const paddingLeft = Math.max(20 * scale, 16);
-        let currentY = bannerY + (24 * scale);
+        let currentY = bannerY + (22 * scale);
 
         // Line 1: Header Brand (Dynamic based on active list)
         ctx.font = `bold ${titleFontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
@@ -158,27 +198,33 @@ export async function addDepotelWatermark(
         ctx.fillText(brandTitle, paddingLeft, currentY);
 
         // Line 2: Site ID & Site Name
-        currentY += (24 * scale);
+        currentY += (22 * scale);
         ctx.font = `600 ${subFontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
         ctx.fillStyle = '#FDE047';
         const siteDisplay = `SITE: ${siteId} - ${siteName}`;
         ctx.fillText(siteDisplay, paddingLeft, currentY);
 
         // Line 3: Meter ID & Operator
-        currentY += (20 * scale);
+        currentY += (19 * scale);
         ctx.font = `500 ${smallFontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
         ctx.fillStyle = '#E2E8F0';
-        ctx.fillText(`ID Pelanggan/Meter: ${meterId}  |  Petugas: ${operatorName}`, paddingLeft, currentY);
+        ctx.fillText(`ID Pelanggan/Meter: ${meterId || '-'}  |  Petugas: ${operatorName}`, paddingLeft, currentY);
 
-        // Line 4: Timestamp (Date & Time)
+        // Line 4: Geotag Coordinates & Location
+        currentY += (18 * scale);
+        ctx.font = `600 ${smallFontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+        ctx.fillStyle = '#A7F3D0';
+        ctx.fillText(`📍 Geotag: ${geotagText}`, paddingLeft, currentY);
+
+        // Line 5: Timestamp (Date & Time)
         currentY += (18 * scale);
         ctx.font = `600 ${smallFontSize}px monospace`;
         ctx.fillStyle = '#67E8F9';
-        ctx.fillText(`🕒 Waktu Pengambilan: ${fullTimeString}`, paddingLeft, currentY);
+        ctx.fillText(`🕒 Waktu: ${fullTimeString}`, paddingLeft, currentY);
 
         // Quality 0.76 provides ultra-crisp output at ~90KB size for 3x faster network delivery
         const dataUrl = canvas.toDataURL('image/jpeg', 0.76);
-        resolve({ dataUrl, formattedTime: fullTimeString, brandTitle });
+        resolve({ dataUrl, formattedTime: fullTimeString, brandTitle, geotag: geotagText });
       } catch (err) {
         if (objectUrlToRevoke) URL.revokeObjectURL(objectUrlToRevoke);
         reject(err);

@@ -6,13 +6,16 @@ import { getRealTimeWIBDateString } from './AddCategoryModal';
 interface WhatsAppModalProps {
   category: UpdateCategory;
   onClose: () => void;
+  initialFilter?: 'all' | 'unchecked' | 'checked';
 }
 
 export const WhatsAppModal: React.FC<WhatsAppModalProps> = ({
   category,
   onClose,
+  initialFilter = 'all',
 }) => {
   const [copied, setCopied] = useState(false);
+  const [filterMode, setFilterMode] = useState<'all' | 'unchecked' | 'checked'>(initialFilter);
   const [periodInput, setPeriodInput] = useState<string>(() => {
     return category.period && category.period.trim() !== ''
       ? category.period.trim()
@@ -37,7 +40,13 @@ export const WhatsAppModal: React.FC<WhatsAppModalProps> = ({
     if (isStandby) {
       // Group by siteId (e.g. JAKTIM 1, JAKTIM 2)
       const groups: { [key: string]: typeof category.sites } = {};
-      category.sites.forEach((site) => {
+      const targetSites = category.sites.filter((site) => {
+        if (filterMode === 'unchecked') return !site.checked;
+        if (filterMode === 'checked') return site.checked;
+        return true;
+      });
+
+      targetSites.forEach((site) => {
         const groupKey = site.siteId || 'JAKTIM 1';
         if (!groups[groupKey]) groups[groupKey] = [];
         groups[groupKey].push(site);
@@ -59,7 +68,6 @@ export const WhatsAppModal: React.FC<WhatsAppModalProps> = ({
             colorIcon = '🔴';
           }
 
-          // Clean site name from leading color emojis if present
           const cleanName = site.siteName
             .replace(/^[🔴🟡🟢]\s*/, '')
             .replace(/☆.*$/, '')
@@ -78,12 +86,24 @@ export const WhatsAppModal: React.FC<WhatsAppModalProps> = ({
     let header = '';
     if (isNeteco) {
       const percentageInt = totalSites > 0 ? Math.round((checkedSites / totalSites) * 100) : 0;
-      header = `${titleLine}\n${periodLine}\nJumlah Site NETECO : ${totalSites}\n✅ Sudah Tercentang : ${checkedSites} Site\n❌ Belum Tercentang : ${uncheckedSites} Site\n📊 Submitted NETECO : ${percentageInt}%\n____________________________________\n`;
+      header = `${titleLine}\n${periodLine}\nJumlah Site NETECO : ${totalSites}\n✅ Sudah Tercentang : ${checkedSites}\n❌ Belum Tercentang : ${uncheckedSites}\n📊 Submitted NETECO : ${percentageInt}%\n==============================\n`;
     } else {
       header = `${titleLine}\n${periodLine}\nJumlah Tiket Site : ${totalSites} Site\n✅ Sudah Tercentang : ${checkedSites} Site\n❌ Belum Tercentang : ${uncheckedSites} Site\n📊 Submitted : ${percentage}%\n=================================\n`;
     }
 
-    const listLines = category.sites.map((site) => {
+    if (filterMode === 'unchecked') {
+      header += `❌ LIST DAFTAR BELUM TERCENTANG (${uncheckedSites}):\n`;
+    } else if (filterMode === 'checked') {
+      header += `✅ LIST DAFTAR SUDAH TERCENTANG (${checkedSites}):\n`;
+    }
+
+    const filteredSitesList = category.sites.filter((site) => {
+      if (filterMode === 'unchecked') return !site.checked;
+      if (filterMode === 'checked') return site.checked;
+      return true;
+    });
+
+    const listLines = filteredSitesList.map((site) => {
       const icon = site.checked ? '✅' : '❌';
       const cleanSiteName = site.siteName ? site.siteName.trim() : '';
       const cleanSiteId = site.siteId ? site.siteId.trim().toUpperCase() : '';
@@ -166,7 +186,7 @@ export const WhatsAppModal: React.FC<WhatsAppModalProps> = ({
             </div>
             <div>
               <h3 className="text-base font-bold text-[#1e2238]">Update List ke WhatsApp</h3>
-              <p className="text-xs text-slate-500">Format resmi pesan update DEPOTEL</p>
+              <p className="text-xs text-slate-500">Format resmi pesan update DEPOTEL secara real-time</p>
             </div>
           </div>
           <button
@@ -177,8 +197,47 @@ export const WhatsAppModal: React.FC<WhatsAppModalProps> = ({
           </button>
         </div>
 
+        {/* Filter Opsi List WA: Semua / Belum Tercentang / Sudah Tercentang */}
+        <div className="mt-3 flex items-center gap-1.5 p-1 bg-slate-100 rounded-2xl overflow-x-auto scrollbar-none">
+          <button
+            type="button"
+            onClick={() => setFilterMode('all')}
+            className={`flex-1 min-w-[110px] py-1.5 px-3 rounded-xl text-xs font-bold transition cursor-pointer text-center ${
+              filterMode === 'all'
+                ? 'bg-[#1e2238] text-white shadow-2xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            Semua List ({totalSites})
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setFilterMode('unchecked')}
+            className={`flex-1 min-w-[140px] py-1.5 px-3 rounded-xl text-xs font-bold transition cursor-pointer text-center ${
+              filterMode === 'unchecked'
+                ? 'bg-rose-600 text-white shadow-2xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-rose-50'
+            }`}
+          >
+            ❌ Belum Tercentang ({uncheckedSites})
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setFilterMode('checked')}
+            className={`flex-1 min-w-[140px] py-1.5 px-3 rounded-xl text-xs font-bold transition cursor-pointer text-center ${
+              filterMode === 'checked'
+                ? 'bg-emerald-600 text-white shadow-2xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-emerald-50'
+            }`}
+          >
+            ✅ Sudah Tercentang ({checkedSites})
+          </button>
+        </div>
+
         {/* Date / Period Setting (Real-Time WIB & Manual) */}
-        <div className="mt-3 p-3 bg-slate-50 border border-slate-200 rounded-2xl flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 text-xs">
+        <div className="mt-2.5 p-3 bg-slate-50 border border-slate-200 rounded-2xl flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 text-xs">
           <div className="flex items-center gap-2 flex-1 min-w-0">
             <Calendar className="w-4 h-4 text-emerald-600 shrink-0" />
             <span className="font-bold text-slate-700 shrink-0">Hari/Tanggal:</span>
