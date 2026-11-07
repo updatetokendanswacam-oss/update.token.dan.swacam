@@ -411,6 +411,38 @@ export default function App() {
     });
   }, []);
 
+  // Real-time subscription to persistent Firestore photos (/photos collection)
+  useEffect(() => {
+    const unsubscribePhotos = subscribeToPhotos((remotePhotos) => {
+      if (remotePhotos && remotePhotos.length > 0) {
+        setAllPhotos((prev) => {
+          const map = new Map<string, PhotoRecord>();
+          prev.forEach((p) => map.set(p.id, p));
+          remotePhotos.forEach((p) => {
+            const existing = map.get(p.id);
+            if (existing) {
+              map.set(p.id, {
+                ...existing,
+                ...p,
+                dataUrl: p.dataUrl || existing.dataUrl || '',
+                storageUrl: p.storageUrl || existing.storageUrl || '',
+              });
+            } else {
+              map.set(p.id, p);
+            }
+          });
+          const mergedList = Array.from(map.values());
+          mergedList.forEach((p) => savePhotoToDB(p).catch(() => {}));
+          return mergedList;
+        });
+      }
+    });
+
+    return () => {
+      unsubscribePhotos();
+    };
+  }, []);
+
   // Merge photos into categories whenever allPhotos updates
   useEffect(() => {
     if (allPhotos.length === 0) return;
@@ -976,7 +1008,7 @@ export default function App() {
     });
   }, [currentUser?.name]);
 
-  // Photo Permanent Storage & Synchronization (Optimistic & Instant 0ms Latency)
+  // Photo Permanent Storage & Synchronization (Online, Real-time & Persistent)
   const handleSavePhoto = useCallback(async (siteId: string, photo: PhotoRecord): Promise<void> => {
     // 1. Instantly update local React state and storage so UI responds in 0ms
     setAllPhotos((prev) => [photo, ...prev.filter((p) => p.id !== photo.id)]);
@@ -1005,93 +1037,100 @@ export default function App() {
     setCameraSite(null);
     setCameraCategory(null);
 
-    // 2. Automatically save copy to device Phone Gallery / Media Album
-    let gallerySaved = false;
+    // Save copy to phone gallery asynchronously in parallel
     if (photo.dataUrl) {
-      try {
-        const result = await savePhotoToPhoneGallery(
-          photo.dataUrl,
-          photo.categoryTitle || photo.categoryType || 'swacam',
-          photo.siteName || photo.siteId || siteId
-        );
-        gallerySaved = result.success;
-      } catch (e) {
-        console.warn('Gallery save notice:', e);
-      }
+      savePhotoToPhoneGallery(
+        photo.dataUrl,
+        photo.categoryTitle || photo.categoryType || 'swacam',
+        photo.siteName || photo.siteId || siteId
+      ).catch((e) => console.warn('Gallery save notice:', e));
     }
 
-    if (gallerySaved) {
-      showToast(`Foto (${photo.brandTitle || 'DEPOTEL'}) tersimpan di Cloud & Galeri HP!`);
-    } else {
-      showToast(`Foto (${photo.brandTitle || 'DEPOTEL'}) tersimpan di Cloud!`);
-    }
+    // 2. Perform Firebase Cloud Storage upload & Firestore write with auto-retry logic
+    let retries = 3;
+    let savedPhoto: PhotoRecord | null = null;
+    let lastError: any = null;
 
-    // 2. Perform Firebase Cloud Storage upload and Firestore write in background without blocking UI
-    setTimeout(async () => {
+    while (retries > 0) {
       try {
-        const savedPhoto = await savePhotoPermanently(photo);
-
-        // Update with permanent storageUrl once background write completes
-        setAllPhotos((prev) => [savedPhoto, ...prev.filter((p) => p.id !== savedPhoto.id)]);
-
-        setCategories((prevCategories) => {
-          const refSite = findSiteGlobally(siteId, prevCategories);
-          const refCode = refSite?.siteId?.trim().toLowerCase();
-          const refMeter = refSite?.meterId?.trim();
-          const affectedCatIds = new Set<string>();
-
-          const updated = prevCategories.map((cat) => {
-            let modified = false;
-            const sites = cat.sites.map((site) => {
-              const isExactMatch = site.id === siteId;
-              const isSameSiteCode = Boolean(
-                refCode &&
-                  refCode !== '' &&
-                  ((site.siteId && site.siteId.trim().toLowerCase() === refCode) ||
-                    (site.siteName && site.siteName.toLowerCase().includes(refCode)))
-              );
-              const isSameMeter = Boolean(
-                refMeter &&
-                  refMeter !== '' &&
-                  refMeter !== '-' &&
-                  site.meterId &&
-                  site.meterId === refMeter
-              );
-
-              if (isExactMatch || isSameSiteCode || isSameMeter) {
-                modified = true;
-                const existingPhotos = site.photos || [];
-                const newPhotos = existingPhotos.map((p) => (p.id === savedPhoto.id ? savedPhoto : p));
-                const updatedSite: SiteItem = {
-                  ...site,
-                  photos: newPhotos,
-                };
-                syncManager.markSitePending(updatedSite, cat.id);
-                return updatedSite;
-              }
-              return site;
-            });
-
-            if (modified) {
-              affectedCatIds.add(cat.id);
-            }
-
-            return { ...cat, sites };
-          });
-
-          updated.forEach((c) => {
-            if (affectedCatIds.has(c.id)) {
-              saveCategoryToFirestore(c).catch((e) => console.warn('Direct category photo save notice:', e));
-              syncManager.queueCategorySave(c, true);
-            }
-          });
-
-          return updated;
-        });
+        savedPhoto = await savePhotoPermanently(photo);
+        break;
       } catch (err) {
-        console.warn('Background photo upload notice:', err);
+        lastError = err;
+        retries -= 1;
+        if (retries > 0) {
+          await new Promise((res) => setTimeout(res, 1000));
+        }
       }
-    }, 0);
+    }
+
+    if (!savedPhoto) {
+      console.error('Failed saving photo after retries:', lastError);
+      showToast('Gagal mengunggah foto ke database cloud. Silakan periksa koneksi internet Anda.');
+      throw lastError || new Error('Gagal mengunggah foto ke database cloud.');
+    }
+
+    // Update with permanent storageUrl once write completes
+    const finalSavedPhoto = savedPhoto;
+    setAllPhotos((prev) => [finalSavedPhoto, ...prev.filter((p) => p.id !== finalSavedPhoto.id)]);
+
+    // Commit category document write directly to Firestore for immediate real-time sync across all devices
+    const affectedCatIds = new Set<string>();
+    setCategories((prevCategories) => {
+      const refSite = findSiteGlobally(siteId, prevCategories);
+      const refCode = refSite?.siteId?.trim().toLowerCase();
+      const refMeter = refSite?.meterId?.trim();
+
+      const updated = prevCategories.map((cat) => {
+        let modified = false;
+        const sites = cat.sites.map((site) => {
+          const isExactMatch = site.id === siteId;
+          const isSameSiteCode = Boolean(
+            refCode &&
+              refCode !== '' &&
+              ((site.siteId && site.siteId.trim().toLowerCase() === refCode) ||
+                (site.siteName && site.siteName.toLowerCase().includes(refCode)))
+          );
+          const isSameMeter = Boolean(
+            refMeter &&
+              refMeter !== '' &&
+              refMeter !== '-' &&
+              site.meterId &&
+              site.meterId === refMeter
+          );
+
+          if (isExactMatch || isSameSiteCode || isSameMeter) {
+            modified = true;
+            const existingPhotos = site.photos || [];
+            const newPhotos = existingPhotos.map((p) => (p.id === finalSavedPhoto.id ? finalSavedPhoto : p));
+            const updatedSite: SiteItem = {
+              ...site,
+              photos: newPhotos,
+            };
+            syncManager.markSitePending(updatedSite, cat.id);
+            return updatedSite;
+          }
+          return site;
+        });
+
+        if (modified) {
+          affectedCatIds.add(cat.id);
+        }
+
+        return { ...cat, sites };
+      });
+
+      updated.forEach((c) => {
+        if (affectedCatIds.has(c.id)) {
+          saveCategoryToFirestore(c).catch((e) => console.warn('Direct category photo save notice:', e));
+          syncManager.queueCategorySave(c, true);
+        }
+      });
+
+      return updated;
+    });
+
+    showToast(`Foto (${photo.brandTitle || 'DEPOTEL'}) tersimpan di Cloud Database!`);
   }, [currentUser?.name, showToast]);
 
   const handleDeletePhoto = useCallback(async (siteId: string, photoId: string): Promise<void> => {

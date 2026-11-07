@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
-import { X, PlusCircle, Building2, Hash } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { X, PlusCircle, Building2, Hash, Search, Database, Check, Sparkles } from 'lucide-react';
 import { SiteItem } from '../types';
+import { getMasterSiteDatabase, searchMasterSites, DatabaseSite } from '../utils/siteDatabaseService';
 
 interface AddSiteModalProps {
   onClose: () => void;
@@ -15,6 +16,77 @@ export const AddSiteModal: React.FC<AddSiteModalProps> = ({
   const [siteId, setSiteId] = useState('');
   const [siteName, setSiteName] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
+
+  const [masterDatabase, setMasterDatabase] = useState<DatabaseSite[]>([]);
+  const [isLoadingDatabase, setIsLoadingDatabase] = useState(true);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [suggestions, setSuggestions] = useState<DatabaseSite[]>([]);
+
+  const suggestionsRef = useRef<HTMLDivElement | null>(null);
+
+  // Load master site database from Google Sheet 1KFQ8WY4NNFAnPuzMYwKnJW9GyvmuPYFfLyk2u8If5AU
+  useEffect(() => {
+    let isMounted = true;
+    getMasterSiteDatabase()
+      .then((data) => {
+        if (isMounted) {
+          setMasterDatabase(data);
+          setIsLoadingDatabase(false);
+        }
+      })
+      .catch((err) => {
+        console.warn('Error loading master site DB:', err);
+        if (isMounted) setIsLoadingDatabase(false);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // Update suggestions whenever siteId or siteName changes
+  const handleSiteIdChange = (val: string) => {
+    setSiteId(val);
+    if (val.trim().length >= 1 && masterDatabase.length > 0) {
+      const results = searchMasterSites(masterDatabase, val, 15);
+      setSuggestions(results);
+      setShowSuggestions(results.length > 0);
+    } else {
+      setShowSuggestions(false);
+    }
+  };
+
+  const handleSiteNameChange = (val: string) => {
+    setSiteName(val);
+    if (val.trim().length >= 2 && masterDatabase.length > 0 && !showSuggestions) {
+      const results = searchMasterSites(masterDatabase, val, 15);
+      setSuggestions(results);
+      setShowSuggestions(results.length > 0);
+    }
+  };
+
+  const handleSelectSite = (item: DatabaseSite) => {
+    const formattedId = item.siteId.toUpperCase();
+    let formattedName = item.siteName;
+
+    if (item.siteId && item.siteName && !item.siteName.toUpperCase().includes(item.siteId)) {
+      formattedName = `${item.siteId}_${item.siteName}`;
+    }
+
+    setSiteId(formattedId);
+    setSiteName(formattedName);
+    setShowSuggestions(false);
+  };
+
+  // Close suggestions when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (suggestionsRef.current && !suggestionsRef.current.contains(e.target as Node)) {
+        setShowSuggestions(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -48,7 +120,14 @@ export const AddSiteModal: React.FC<AddSiteModalProps> = ({
             </div>
             <div>
               <h3 className="text-base font-bold text-[#1e2238]">Tambah Site Baru</h3>
-              <p className="text-xs text-slate-500">Tambahkan site ke daftar monitoring saat ini</p>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <Database className="w-3 h-3 text-emerald-600" />
+                <p className="text-[11px] font-semibold text-emerald-700">
+                  {isLoadingDatabase
+                    ? 'Memuat Master DB Site...'
+                    : `Terhubung Master DB (${masterDatabase.length.toLocaleString('id-ID')} Site)`}
+                </p>
+              </div>
             </div>
           </div>
           <button
@@ -65,6 +144,7 @@ export const AddSiteModal: React.FC<AddSiteModalProps> = ({
               {errorMessage}
             </div>
           )}
+
           <div>
             <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-1.5 flex items-center justify-between">
               <span className="flex items-center gap-1.5">
@@ -84,23 +164,68 @@ export const AddSiteModal: React.FC<AddSiteModalProps> = ({
             />
           </div>
 
-          <div>
+          {/* Input SITE ID dengan Autocomplete dari Master Database */}
+          <div className="relative" ref={suggestionsRef}>
             <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-1.5 flex items-center justify-between">
               <span className="flex items-center gap-1.5">
                 <Building2 className="w-3.5 h-3.5 text-indigo-600" />
                 <span>Site ID</span>
               </span>
-              <span className="text-[11px] font-semibold text-slate-400 font-sans uppercase">
-                (Opsional)
+              <span className="text-[11px] font-semibold text-emerald-700 font-sans flex items-center gap-1">
+                <Sparkles className="w-3 h-3 text-emerald-600" />
+                <span>Ketik untuk cari master DB</span>
               </span>
             </label>
-            <input
-              type="text"
-              value={siteId}
-              onChange={(e) => setSiteId(e.target.value)}
-              placeholder="Contoh: JKT781"
-              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-mono uppercase text-slate-900 focus:outline-none focus:border-blue-600 transition placeholder:font-sans placeholder:text-slate-400"
-            />
+            <div className="relative">
+              <input
+                type="text"
+                value={siteId}
+                onChange={(e) => handleSiteIdChange(e.target.value)}
+                onFocus={() => {
+                  if (siteId.trim().length >= 1 && suggestions.length > 0) {
+                    setShowSuggestions(true);
+                  }
+                }}
+                placeholder="Ketik Site ID (contoh: BKS598, JKT781, EPE...)"
+                className="w-full px-3.5 py-2.5 pl-9 rounded-xl border border-slate-300 text-sm font-mono uppercase text-slate-900 focus:outline-none focus:border-blue-600 transition placeholder:font-sans placeholder:text-slate-400"
+              />
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+            </div>
+
+            {/* Suggestions Dropdown Box */}
+            {showSuggestions && suggestions.length > 0 && (
+              <div className="absolute left-0 right-0 top-full mt-1 bg-white rounded-2xl border border-blue-200 shadow-2xl z-50 max-h-56 overflow-y-auto divide-y divide-slate-100 animate-in fade-in">
+                <div className="px-3 py-1.5 bg-slate-50 text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center justify-between sticky top-0 border-b border-slate-100">
+                  <span>Hasil Master Database ({suggestions.length} site):</span>
+                  <span className="text-emerald-700">Google Sheet 2.380+ Site</span>
+                </div>
+
+                {suggestions.map((item, idx) => (
+                  <div
+                    key={`${item.siteId}-${idx}`}
+                    onClick={() => handleSelectSite(item)}
+                    className="p-2.5 hover:bg-blue-50/80 transition cursor-pointer flex items-center justify-between gap-2"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="px-2 py-0.5 rounded bg-blue-100 text-blue-800 font-mono font-bold text-xs">
+                          {item.siteId}
+                        </span>
+                        <span className="font-bold text-slate-900 text-xs truncate">
+                          {item.siteName}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-500 mt-0.5 truncate">
+                        {item.subdistrict ? `${item.subdistrict}, ` : ''}
+                        {item.village ? item.village : ''}
+                        {item.siteOwner ? ` • ${item.siteOwner}` : ''}
+                      </p>
+                    </div>
+                    <Check className="w-4 h-4 text-blue-600 shrink-0 opacity-0 group-hover:opacity-100" />
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <div>
@@ -110,7 +235,7 @@ export const AddSiteModal: React.FC<AddSiteModalProps> = ({
             <textarea
               rows={3}
               value={siteName}
-              onChange={(e) => setSiteName(e.target.value)}
+              onChange={(e) => handleSiteNameChange(e.target.value)}
               placeholder="Contoh: JKT781-TanahKoja1TBG-MACRO atau JKT727_JLRayaTiparCakungDMT-MACRO (Juned)"
               className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm text-slate-900 focus:outline-none focus:border-blue-600 transition"
               required
@@ -138,3 +263,4 @@ export const AddSiteModal: React.FC<AddSiteModalProps> = ({
     </div>
   );
 };
+

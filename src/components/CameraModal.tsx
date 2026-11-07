@@ -131,10 +131,11 @@ export const CameraModal: React.FC<CameraModalProps> = ({
     }
   };
 
-  const handleConfirmSave = () => {
+  const handleConfirmSave = async () => {
     if (!previewWatermarked || isUploading) return;
 
     setIsUploading(true);
+    setUploadError(null);
 
     const newPhoto: PhotoRecord = {
       id: `photo-${site.siteId || 'site'}-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
@@ -149,12 +150,21 @@ export const CameraModal: React.FC<CameraModalProps> = ({
       categoryTitle: category?.title || categoryTitle || '',
       brandTitle: previewWatermarked.brandTitle || brandTitle,
       formattedTime: previewWatermarked.formattedTime,
+      geotag: previewWatermarked.geotag,
     };
 
-    // Optimistically trigger save handler & close modal instantly (0ms delay)
-    stopCamera();
-    onSavePhoto(site.id, newPhoto);
-    onClose();
+    try {
+      await onSavePhoto(site.id, newPhoto);
+      setUploadSuccess(true);
+      stopCamera();
+      setTimeout(() => {
+        onClose();
+      }, 700);
+    } catch (err: any) {
+      console.error('Error saving photo:', err);
+      setUploadError(err?.message || 'Gagal mengunggah foto ke database. Silakan coba lagi.');
+      setIsUploading(false);
+    }
   };
 
   return (

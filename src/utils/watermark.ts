@@ -1,10 +1,14 @@
 /**
  * Helper to fetch device Geolocation coordinates for watermarking.
- * Returns formatted Lat, Lng coordinates or falls back to site info if location is unavailable.
+ * Returns formatted Alamat Site & GPS coordinates (or registered site address if GPS unavailable).
  */
 export async function getDeviceGeolocationString(siteId: string, siteName: string): Promise<string> {
+  const cleanId = siteId ? siteId.trim() : '-';
+  const cleanName = siteName ? siteName.trim() : '-';
+  const siteAddressLabel = `${cleanName} (${cleanId})`;
+
   if (typeof window === 'undefined' || !('geolocation' in navigator)) {
-    return `Site ${siteId} (${siteName})`;
+    return siteAddressLabel;
   }
 
   try {
@@ -27,13 +31,13 @@ export async function getDeviceGeolocationString(siteId: string, siteName: strin
       const lat = pos.coords.latitude.toFixed(6);
       const lng = pos.coords.longitude.toFixed(6);
       const acc = pos.coords.accuracy ? ` (±${Math.round(pos.coords.accuracy)}m)` : '';
-      return `${lat}, ${lng}${acc} - Site ${siteId}`;
+      return `${siteAddressLabel} | GPS: ${lat}, ${lng}${acc}`;
     }
   } catch (err) {
     console.warn('Geolocation lookup notice:', err);
   }
 
-  return `Site ${siteId} (${siteName})`;
+  return siteAddressLabel;
 }
 
 /**

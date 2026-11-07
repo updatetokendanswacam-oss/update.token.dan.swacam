@@ -26,6 +26,7 @@ export interface PhotoRecord {
   categoryTitle?: string;
   brandTitle?: string;
   formattedTime: string;
+  geotag?: string;
   fileSize?: number;
   createdAt?: string;
   updatedAt?: string;
