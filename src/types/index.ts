@@ -14,6 +14,7 @@ export interface User {
 export interface PhotoRecord {
   id: string;
   siteId: string;
+  siteCode?: string;
   siteName: string;
   meterId: string;
   dataUrl: string;

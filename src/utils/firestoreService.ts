@@ -364,6 +364,7 @@ export async function saveCategoryToFirestore(category: UpdateCategory): Promise
     photos: (s.photos || []).map((p) => ({
       id: p.id,
       siteId: p.siteId || s.id,
+      siteCode: p.siteCode || s.siteId || '',
       siteName: p.siteName || s.siteName || '',
       meterId: p.meterId || s.meterId || '',
       storageUrl: p.storageUrl || '',
@@ -438,10 +439,11 @@ export async function savePhotoPermanently(photo: PhotoRecord): Promise<PhotoRec
   let storageUrl = photo.storageUrl || '';
   let storagePath = photo.storagePath || '';
 
-  // 1. Attempt upload to Firebase Cloud Storage via binary Blob (faster than base64)
+  // 1. Attempt upload to Firebase Cloud Storage via binary Blob
   if (storage && photo.dataUrl && photo.dataUrl.startsWith('data:')) {
     try {
-      const generatedPath = `photos/${photo.siteId}/${photo.id}.jpg`;
+      const folderKey = photo.siteCode || photo.siteId || 'site';
+      const generatedPath = `photos/${folderKey}/${photo.id}.jpg`;
       const storageRef = ref(storage, generatedPath);
       const blob = dataURLtoBlob(photo.dataUrl);
       await uploadBytes(storageRef, blob, {
@@ -453,7 +455,8 @@ export async function savePhotoPermanently(photo: PhotoRecord): Promise<PhotoRec
     } catch (err) {
       console.warn('Firebase Cloud Storage binary upload notice, trying string fallback:', err);
       try {
-        const generatedPath = `photos/${photo.siteId}/${photo.id}.jpg`;
+        const folderKey = photo.siteCode || photo.siteId || 'site';
+        const generatedPath = `photos/${folderKey}/${photo.id}.jpg`;
         const storageRef = ref(storage, generatedPath);
         await uploadString(storageRef, photo.dataUrl, 'data_url');
         storageUrl = await getDownloadURL(storageRef);

@@ -87,6 +87,7 @@ export function mergePhotosIntoCategories(
 
     const keys = new Set<string>();
     if (photo.siteId) keys.add(photo.siteId.toLowerCase().trim());
+    if (photo.siteCode) keys.add(photo.siteCode.toLowerCase().trim());
     if (photo.siteName) keys.add(photo.siteName.toLowerCase().trim());
     if (photo.meterId && photo.meterId !== '-') keys.add(photo.meterId.trim());
 
@@ -351,14 +352,44 @@ export default function App() {
             // Once confirmed in Firestore snapshot, remove from pending creates
             pendingCategoryIdsRef.current.delete(remoteCat.id);
 
+            const prevCat = prevCategories.find((c) => c.id === remoteCat.id);
+
             const mergedSites = remoteCat.sites.map((remoteSite) => {
               // 1. If this exact site has an in-flight pending edit on THIS client, preserve it
               const pending = syncManager.getPendingSite(remoteSite.id);
               if (pending) {
                 return pending;
               }
-              // 2. Otherwise, adopt the authoritative Firestore record directly!
-              return remoteSite;
+
+              // 2. Preserve any existing photos from prevCategories if remoteSite.photos is missing or shorter
+              const prevSite = prevCat?.sites.find((s) => s.id === remoteSite.id);
+              let combinedPhotos = remoteSite.photos || [];
+
+              if (prevSite && prevSite.photos && prevSite.photos.length > 0) {
+                const photoMap = new Map<string, PhotoRecord>();
+                prevSite.photos.forEach((p) => {
+                  if (p && p.id) photoMap.set(p.id, p);
+                });
+                combinedPhotos.forEach((p) => {
+                  if (p && p.id) {
+                    const current = photoMap.get(p.id);
+                    photoMap.set(p.id, {
+                      ...(current || {}),
+                      ...p,
+                      dataUrl: p.dataUrl || current?.dataUrl || '',
+                      storageUrl: p.storageUrl || current?.storageUrl || '',
+                    });
+                  }
+                });
+                combinedPhotos = Array.from(photoMap.values()).sort(
+                  (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+                );
+              }
+
+              return {
+                ...remoteSite,
+                photos: combinedPhotos,
+              };
             });
 
             return {

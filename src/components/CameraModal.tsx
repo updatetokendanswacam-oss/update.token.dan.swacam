@@ -143,6 +143,7 @@ export const CameraModal: React.FC<CameraModalProps> = ({
     const newPhoto: PhotoRecord = {
       id: `photo-${site.siteId || 'site'}-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
       siteId: site.id,
+      siteCode: site.siteId || '',
       siteName: site.siteName,
       meterId: site.meterId,
       dataUrl: previewWatermarked.dataUrl,
