@@ -26,12 +26,13 @@ export function cachePhotoUrl(photoId: string, url: string): void {
  * Retrieves the best instantly-available URL for a photo record.
  * Prioritizes memory cache, then dataUrl, then storageUrl.
  */
-export function getOptimizedPhotoUrl(photo: { id?: string; dataUrl?: string; storageUrl?: string }): string {
+export function getOptimizedPhotoUrl(photo: { id?: string; dataUrl?: string; storageUrl?: string; url?: string; photoUrl?: string }): string {
   if (!photo) return '';
   if (photo.id && memoryUrlCache.has(photo.id)) {
-    return memoryUrlCache.get(photo.id)!;
+    const cached = memoryUrlCache.get(photo.id);
+    if (cached) return cached;
   }
-  const resolved = photo.dataUrl || photo.storageUrl || '';
+  const resolved = photo.dataUrl || photo.storageUrl || photo.url || photo.photoUrl || '';
   if (photo.id && resolved) {
     cachePhotoUrl(photo.id, resolved);
   }

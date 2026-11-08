@@ -348,7 +348,7 @@ export default function App() {
           const deletedIds = deletedCategoryIdsRef.current;
           const activeRemote = fixedCats.filter((c) => !deletedIds.has(c.id));
 
-          const merged = activeRemote.map((remoteCat) => {
+          const merged: UpdateCategory[] = activeRemote.map((remoteCat) => {
             // Once confirmed in Firestore snapshot, remove from pending creates
             pendingCategoryIdsRef.current.delete(remoteCat.id);
 
@@ -357,14 +357,41 @@ export default function App() {
             const mergedSites = remoteCat.sites.map((remoteSite) => {
               // 1. If this exact site has an in-flight pending edit on THIS client, preserve it
               const pending = syncManager.getPendingSite(remoteSite.id);
+              const prevSite = prevCat?.sites.find((s) => s.id === remoteSite.id);
+
+              let targetSite = remoteSite;
+
               if (pending) {
-                return pending;
+                targetSite = pending;
+              } else if (prevSite) {
+                const prevTime = prevSite.updatedAt ? new Date(prevSite.updatedAt).getTime() : 0;
+                const remoteTime = remoteSite.updatedAt ? new Date(remoteSite.updatedAt).getTime() : 0;
+
+                // Preserve local edit state if prevSite is newer or recently toggled/edited
+                if (prevTime > remoteTime) {
+                  targetSite = {
+                    ...remoteSite,
+                    checked: prevSite.checked,
+                    checkedBy: prevSite.checkedBy,
+                    statusColor: prevSite.statusColor || remoteSite.statusColor,
+                    tokens: (prevSite.tokens && prevSite.tokens.length > 0) ? prevSite.tokens : remoteSite.tokens,
+                    updatedAt: prevSite.updatedAt,
+                    updatedBy: prevSite.updatedBy,
+                  };
+                } else if (prevSite.checked && !remoteSite.checked && (Date.now() - prevTime < 30000)) {
+                  // Safety guard: If checked was recently toggled to true locally, don't let an older remote snapshot reset it
+                  targetSite = {
+                    ...remoteSite,
+                    checked: true,
+                    checkedBy: prevSite.checkedBy || remoteSite.checkedBy,
+                    updatedAt: prevSite.updatedAt,
+                    updatedBy: prevSite.updatedBy,
+                  };
+                }
               }
 
-              // 2. Preserve any existing photos from prevCategories if remoteSite.photos is missing or shorter
-              const prevSite = prevCat?.sites.find((s) => s.id === remoteSite.id);
-              let combinedPhotos = remoteSite.photos || [];
-
+              // 2. Preserve & merge photos
+              let combinedPhotos = targetSite.photos || remoteSite.photos || [];
               if (prevSite && prevSite.photos && prevSite.photos.length > 0) {
                 const photoMap = new Map<string, PhotoRecord>();
                 prevSite.photos.forEach((p) => {
@@ -387,7 +414,7 @@ export default function App() {
               }
 
               return {
-                ...remoteSite,
+                ...targetSite,
                 photos: combinedPhotos,
               };
             });

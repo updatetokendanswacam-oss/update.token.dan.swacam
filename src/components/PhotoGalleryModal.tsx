@@ -63,7 +63,7 @@ export const PhotoGalleryModal: React.FC<PhotoGalleryModalProps> = ({
     return null;
   }
 
-  const imageUrl = recoveredUrl || getOptimizedPhotoUrl(activePhoto) || activePhoto.dataUrl || activePhoto.storageUrl;
+  const imageUrl = recoveredUrl || getOptimizedPhotoUrl(activePhoto) || activePhoto.dataUrl || activePhoto.storageUrl || (activePhoto as any).url || '';
 
   const handleDownload = () => {
     if (!imageUrl) return;
@@ -151,23 +151,19 @@ export const PhotoGalleryModal: React.FC<PhotoGalleryModalProps> = ({
 
         {/* Main Image Viewer */}
         <div className="flex-1 bg-black flex items-center justify-center p-3 relative overflow-hidden min-h-[300px]">
-          {imageUrl && imageUrl.trim() !== '' ? (
-            <img
-              src={imageUrl}
-              alt={`Dokumentasi Catat Meter ${site.siteId}`}
-              className="max-h-[60vh] max-w-full object-contain rounded-lg shadow-2xl"
-              onError={(e) => {
-                // If storageUrl fails or has CORS, fallback to dataUrl if available
-                if (activePhoto.dataUrl && (e.currentTarget.src !== activePhoto.dataUrl)) {
-                  e.currentTarget.src = activePhoto.dataUrl;
-                }
-              }}
-            />
-          ) : (
-            <div className="text-center p-8 text-slate-400">
-              <p className="text-sm font-semibold">Foto sedang dimuat dari server...</p>
-            </div>
-          )}
+          <img
+            src={imageUrl || activePhoto.dataUrl || activePhoto.storageUrl || (activePhoto as any).url || undefined}
+            alt={`Dokumentasi Catat Meter ${site.siteId}`}
+            className="max-h-[60vh] max-w-full object-contain rounded-lg shadow-2xl"
+            onError={(e) => {
+              // If storageUrl fails or has CORS, fallback to dataUrl if available
+              if (activePhoto.dataUrl && (e.currentTarget.src !== activePhoto.dataUrl)) {
+                e.currentTarget.src = activePhoto.dataUrl;
+              } else if (activePhoto.storageUrl && (e.currentTarget.src !== activePhoto.storageUrl)) {
+                e.currentTarget.src = activePhoto.storageUrl;
+              }
+            }}
+          />
 
           {/* Navigation Arrows if multiple photos */}
           {photos.length > 1 && (

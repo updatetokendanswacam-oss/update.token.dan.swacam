@@ -115,7 +115,7 @@ class RealtimeSyncManager {
     this.pendingSiteChanges.set(site.id, {
       site,
       categoryId,
-      expiresAt: Date.now() + 6000, // 6s TTL safety window
+      expiresAt: Date.now() + 15000, // 15s TTL safety window to protect optimistic edits from snapshot latency
     });
   }
 
@@ -159,10 +159,6 @@ class RealtimeSyncManager {
       this.pendingCategoryWrites.delete(category.id);
       try {
         await saveCategoryToFirestore(category);
-        // Clear pending flags for sites in this category now that Firestore write succeeded
-        category.sites.forEach((s) => {
-          this.pendingSiteChanges.delete(s.id);
-        });
       } catch (err) {
         console.warn(`Write queue retry scheduled for category ${category.id}:`, err);
         if (onError) {
@@ -176,9 +172,6 @@ class RealtimeSyncManager {
         if (typeof navigator !== 'undefined' && navigator.onLine) {
           setTimeout(() => {
             saveCategoryToFirestore(category)
-              .then(() => {
-                category.sites.forEach((s) => this.pendingSiteChanges.delete(s.id));
-              })
               .catch(() => {});
           }, 2000);
         }

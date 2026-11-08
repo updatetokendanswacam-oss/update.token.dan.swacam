@@ -231,32 +231,27 @@ export const SiteCard: React.FC<SiteCardProps> = React.memo(({
             {site.photos && site.photos.length > 0 ? (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 mt-2">
                 {site.photos.map((photo, idx) => {
-                  const photoUrl = getOptimizedPhotoUrl(photo);
-                  const validSrc = photoUrl && photoUrl.trim() !== '' ? photoUrl : undefined;
+                  const photoUrl = getOptimizedPhotoUrl(photo) || photo.dataUrl || photo.storageUrl || (photo as any).url || '';
                   return (
                     <div
                       key={photo.id || idx}
                       onClick={() => onViewPhoto(site, idx)}
                       className="relative group rounded-xl overflow-hidden border border-slate-700 bg-slate-950 cursor-pointer aspect-video flex items-center justify-center"
                     >
-                      {validSrc ? (
-                        <img
-                          src={validSrc}
-                          alt={`Foto Site ${site.siteId}`}
-                          loading="lazy"
-                          decoding="async"
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                          onError={(e) => {
-                            if (photo.dataUrl && e.currentTarget.src !== photo.dataUrl) {
-                              e.currentTarget.src = photo.dataUrl;
-                            }
-                          }}
-                        />
-                      ) : (
-                        <div className="text-[10px] text-slate-400 font-medium p-2 text-center">
-                          Memuat...
-                        </div>
-                      )}
+                      <img
+                        src={photoUrl || undefined}
+                        alt={`Foto Site ${site.siteId}`}
+                        loading="lazy"
+                        decoding="async"
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        onError={(e) => {
+                          if (photo.dataUrl && e.currentTarget.src !== photo.dataUrl) {
+                            e.currentTarget.src = photo.dataUrl;
+                          } else if (photo.storageUrl && e.currentTarget.src !== photo.storageUrl) {
+                            e.currentTarget.src = photo.storageUrl;
+                          }
+                        }}
+                      />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex flex-col justify-end p-1.5">
                         <p className="text-[9px] font-bold text-yellow-300 truncate">
                           {photo.formattedTime || 'Dokumentasi'}
@@ -290,6 +285,7 @@ export const SiteCard: React.FC<SiteCardProps> = React.memo(({
     prev.site.siteName === next.site.siteName &&
     prev.site.siteId === next.site.siteId &&
     prev.site.meterId === next.site.meterId &&
+    prev.site.updatedAt === next.site.updatedAt &&
     prev.site.tokens === next.site.tokens &&
     prev.site.photos === next.site.photos &&
     prev.category.id === next.category.id &&
