@@ -843,25 +843,20 @@ export default function App() {
         return { ...cat, sites };
       });
 
+      // Save to localStorage immediately so state survives refresh and offline app restarts
+      saveCategories(updated);
+
       // Instantly queue debounced background sync to Firestore
       const affectedCategories = updated.filter((c) => affectedCatIds.has(c.id));
       for (const cat of affectedCategories) {
         syncManager.queueCategorySave(cat, false, (err) => {
-          syncManager.clearSitePending(targetSiteId);
-          setCategories((current) =>
-            updateSiteGlobally(current, targetSiteId, (s) => ({
-              ...s,
-              checked: !newCheckedStatus,
-              checkedBy: !newCheckedStatus ? (refSite.checkedBy || '') : '',
-            }))
-          );
-          showToast(`Gagal menyimpan perubahan ke database. Perubahan dikembalikan.`);
+          console.warn(`Category save notice for ${cat.id}:`, err);
         });
       }
 
       return updated;
     });
-  }, [currentUser?.name, showToast]);
+  }, [currentUser?.name]);
 
   // Status color update (🔴 off, 🟡 ijin/sakit, 🟢 standby) for site items
   const handleUpdateSiteStatusColor = useCallback((siteId: string, newStatusColor: 'off' | 'ijin_sakit' | 'standby') => {

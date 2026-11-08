@@ -369,7 +369,9 @@ export async function saveCategoryToFirestore(category: UpdateCategory): Promise
       meterId: p.meterId || s.meterId || '',
       storageUrl: p.storageUrl || '',
       storagePath: p.storagePath || '',
-      dataUrl: p.dataUrl || p.storageUrl || '',
+      // Strip embedded Base64 dataUrl from category document to keep payload lightweight (<25KB)
+      // Full image dataUrl remains safely preserved in /photos/{photoId} collection & IndexedDB
+      dataUrl: p.storageUrl ? '' : (p.dataUrl && p.dataUrl.length > 2000 ? '' : (p.dataUrl || '')),
       timestamp: p.timestamp || new Date().toISOString(),
       capturedBy: p.capturedBy || '',
       capturedById: p.capturedById || '',
