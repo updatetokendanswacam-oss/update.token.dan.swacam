@@ -75,11 +75,10 @@ export function mergePhotosIntoCategories(
   categories: UpdateCategory[],
   allPhotos: PhotoRecord[]
 ): UpdateCategory[] {
-  if (!allPhotos || allPhotos.length === 0) return categories;
-
+  const activeAllPhotoIds = new Set((allPhotos || []).map((p) => p.id));
   const photoMapBySite = new Map<string, PhotoRecord[]>();
 
-  for (const photo of allPhotos) {
+  for (const photo of allPhotos || []) {
     if (!photo || !photo.id) continue;
     if (photo.id && (photo.dataUrl || photo.storageUrl)) {
       cachePhotoUrl(photo.id, photo.dataUrl || photo.storageUrl || '');
@@ -117,14 +116,22 @@ export function mergePhotosIntoCategories(
       if (siteNameKey && photoMapBySite.has(siteNameKey)) matched.push(...photoMapBySite.get(siteNameKey)!);
       if (meterKey && photoMapBySite.has(meterKey)) matched.push(...photoMapBySite.get(meterKey)!);
 
-      if (matched.length === 0 && existingPhotos.length === 0) {
-        return site;
-      }
-
       const photoMap = new Map<string, PhotoRecord>();
+
+      // Filter existingPhotos: ONLY keep if present in activeAllPhotoIds or newly created < 10s
       existingPhotos.forEach((p) => {
-        if (p && p.id) photoMap.set(p.id, p);
+        if (p && p.id) {
+          if (activeAllPhotoIds.has(p.id)) {
+            photoMap.set(p.id, p);
+          } else {
+            const age = Date.now() - new Date(p.createdAt || p.timestamp || 0).getTime();
+            if (age < 10000) {
+              photoMap.set(p.id, p);
+            }
+          }
+        }
       });
+
       matched.forEach((p) => {
         if (p && p.id) {
           const current = photoMap.get(p.id);
@@ -472,28 +479,44 @@ export default function App() {
   // Real-time subscription to persistent Firestore photos (/photos collection)
   useEffect(() => {
     const unsubscribePhotos = subscribeToPhotos((remotePhotos) => {
-      if (remotePhotos && remotePhotos.length > 0) {
-        setAllPhotos((prev) => {
-          const map = new Map<string, PhotoRecord>();
-          prev.forEach((p) => map.set(p.id, p));
-          remotePhotos.forEach((p) => {
-            const existing = map.get(p.id);
-            if (existing) {
-              map.set(p.id, {
-                ...existing,
-                ...p,
-                dataUrl: p.dataUrl || existing.dataUrl || '',
-                storageUrl: p.storageUrl || existing.storageUrl || '',
-              });
-            } else {
+      setAllPhotos((prev) => {
+        const activeRemoteMap = new Map<string, PhotoRecord>();
+        (remotePhotos || []).forEach((p) => {
+          if (p && p.id) activeRemoteMap.set(p.id, p);
+        });
+
+        const map = new Map<string, PhotoRecord>();
+
+        // 1. Populate from activeRemoteMap (canonical source of truth from Firestore)
+        activeRemoteMap.forEach((p, id) => {
+          map.set(id, p);
+        });
+
+        // 2. Preserve local unsaved photos created < 10s ago, or merge dataUrl/storageUrl
+        prev.forEach((p) => {
+          if (!p || !p.id) return;
+          if (!map.has(p.id)) {
+            const age = Date.now() - new Date(p.createdAt || p.timestamp || 0).getTime();
+            if (age < 10000) {
               map.set(p.id, p);
             }
-          });
-          const mergedList = Array.from(map.values());
-          mergedList.forEach((p) => savePhotoToDB(p).catch(() => {}));
-          return mergedList;
+          } else {
+            const existing = map.get(p.id)!;
+            map.set(p.id, {
+              ...existing,
+              ...p,
+              dataUrl: p.dataUrl || existing.dataUrl || '',
+              storageUrl: p.storageUrl || existing.storageUrl || '',
+            });
+          }
         });
-      }
+
+        const mergedList = Array.from(map.values()).sort(
+          (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+        );
+        mergedList.forEach((p) => savePhotoToDB(p).catch(() => {}));
+        return mergedList;
+      });
     });
 
     return () => {
