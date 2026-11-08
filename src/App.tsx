@@ -799,6 +799,13 @@ export default function App() {
       const userName = currentUser?.name || 'Petugas';
       const nowIso = new Date().toISOString();
 
+      const siteDisplay = refSite.siteId ? `${refSite.siteId} - ${refSite.siteName}` : refSite.siteName;
+      if (newCheckedStatus) {
+        showToast(`✅ Status ${siteDisplay} disimpan: Sudah Tercentang (✅)`);
+      } else {
+        showToast(`❌ Status ${siteDisplay} disimpan: Belum Tercentang (❌)`);
+      }
+
       const refCode = refSite.siteId?.trim().toLowerCase();
       const refMeter = refSite.meterId?.trim();
       const affectedCatIds = new Set<string>();
@@ -856,7 +863,7 @@ export default function App() {
 
       return updated;
     });
-  }, [currentUser?.name]);
+  }, [currentUser?.name, showToast]);
 
   // Status color update (🔴 off, 🟡 ijin/sakit, 🟢 standby) for site items
   const handleUpdateSiteStatusColor = useCallback((siteId: string, newStatusColor: 'off' | 'ijin_sakit' | 'standby') => {
