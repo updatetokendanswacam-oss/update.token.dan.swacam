@@ -369,7 +369,7 @@ export async function saveCategoryToFirestore(category: UpdateCategory): Promise
       meterId: p.meterId || s.meterId || '',
       storageUrl: p.storageUrl || '',
       storagePath: p.storagePath || '',
-      dataUrl: p.dataUrl || p.storageUrl || '',
+      dataUrl: p.storageUrl || (p.dataUrl && !p.dataUrl.startsWith('data:') ? p.dataUrl : ''),
       timestamp: p.timestamp || new Date().toISOString(),
       capturedBy: p.capturedBy || '',
       capturedById: p.capturedById || '',
@@ -472,7 +472,7 @@ export async function savePhotoPermanently(photo: PhotoRecord): Promise<PhotoRec
     ...photo,
     storageUrl: storageUrl || photo.storageUrl || '',
     storagePath: storagePath || photo.storagePath || '',
-    dataUrl: photo.dataUrl || storageUrl || '',
+    dataUrl: storageUrl || photo.dataUrl || '',
     createdAt: photo.createdAt || new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
