@@ -6,6 +6,7 @@
 export interface DatabaseSite {
   siteId: string;
   siteName: string;
+  meterId?: string;
   siteOwner?: string;
   city?: string;
   subdistrict?: string;
@@ -13,10 +14,13 @@ export interface DatabaseSite {
   cluster?: string;
 }
 
-const GOOGLE_SHEETS_CSV_URL =
+const PRIMARY_SHEET_URL =
+  'https://docs.google.com/spreadsheets/d/1p2v9lLTVum1oBA6w8UqvCY8Rqg39bVfHC3Mp5Q6WLwU/export?format=csv';
+
+const FALLBACK_SHEET_URL =
   'https://docs.google.com/spreadsheets/d/1KFQ8WY4NNFAnPuzMYwKnJW9GyvmuPYFfLyk2u8If5AU/export?format=csv';
 
-const LOCAL_STORAGE_CACHE_KEY = 'depotel_master_site_database_v1';
+const LOCAL_STORAGE_CACHE_KEY = 'depotel_master_site_database_v2';
 
 let inMemorySiteDatabase: DatabaseSite[] | null = null;
 let fetchPromise: Promise<DatabaseSite[]> | null = null;
@@ -49,6 +53,49 @@ function parseCSVLine(text: string): string[] {
   return result;
 }
 
+function parseCSVToSites(csvText: string): DatabaseSite[] {
+  if (!csvText || csvText.includes('<!DOCTYPE html>') || csvText.includes('Sign in to your Google Account')) {
+    return [];
+  }
+
+  const lines = csvText.split('\n');
+  const sites: DatabaseSite[] = [];
+  const seenKeys = new Set<string>();
+
+  // Skip header (line 0)
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i]?.trim();
+    if (!line) continue;
+
+    const cols = parseCSVLine(line);
+    const rawName = cols[0]?.replace(/^"+|"+$/g, '').trim() || '';
+    const rawId = cols[1]?.replace(/^"+|"+$/g, '').trim().toUpperCase() || '';
+    const rawMeter = cols[3]?.replace(/^"+|"+$/g, '').trim() || cols[7]?.replace(/^"+|"+$/g, '').trim() || '';
+
+    if (!rawName && !rawId) continue;
+
+    const siteId = rawId || rawName.toUpperCase();
+    const siteName = rawName || rawId;
+
+    const uniqueKey = `${siteId}___${siteName}`;
+    if (seenKeys.has(uniqueKey)) continue;
+    seenKeys.add(uniqueKey);
+
+    sites.push({
+      siteId,
+      siteName,
+      meterId: rawMeter !== '-' ? rawMeter : undefined,
+      siteOwner: cols[2]?.replace(/^"+|"+$/g, '').trim(),
+      city: cols[4]?.replace(/^"+|"+$/g, '').trim(),
+      cluster: cols[8]?.replace(/^"+|"+$/g, '').trim(),
+      subdistrict: cols[9]?.replace(/^"+|"+$/g, '').trim(),
+      village: cols[10]?.replace(/^"+|"+$/g, '').trim(),
+    });
+  }
+
+  return sites;
+}
+
 /**
  * Loads master site database from LocalStorage cache or fetches from Google Sheet
  */
@@ -65,7 +112,6 @@ export async function getMasterSiteDatabase(): Promise<DatabaseSite[]> {
         const parsed = JSON.parse(cached) as DatabaseSite[];
         if (Array.isArray(parsed) && parsed.length > 0) {
           inMemorySiteDatabase = parsed;
-          // Trigger background refresh in case Google Sheet updated
           refreshSiteDatabaseInBackground();
           return inMemorySiteDatabase;
         }
@@ -80,64 +126,44 @@ export async function getMasterSiteDatabase(): Promise<DatabaseSite[]> {
   }
 
   fetchPromise = (async () => {
+    let sites: DatabaseSite[] = [];
+
+    // Attempt primary requested Google Sheet URL
     try {
-      const response = await fetch(GOOGLE_SHEETS_CSV_URL);
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+      const resPrimary = await fetch(PRIMARY_SHEET_URL);
+      if (resPrimary.ok) {
+        const csvPrimary = await resPrimary.text();
+        sites = parseCSVToSites(csvPrimary);
       }
-      const csvText = await response.text();
-      const lines = csvText.split('\n');
+    } catch {
+      // Fallback
+    }
 
-      const sites: DatabaseSite[] = [];
-      const seenKeys = new Set<string>();
-
-      // Skip header (line 0)
-      for (let i = 1; i < lines.length; i++) {
-        const line = lines[i]?.trim();
-        if (!line) continue;
-
-        const cols = parseCSVLine(line);
-        const rawName = cols[0]?.replace(/^"+|"+$/g, '').trim() || '';
-        const rawId = cols[1]?.replace(/^"+|"+$/g, '').trim().toUpperCase() || '';
-
-        if (!rawName && !rawId) continue;
-
-        const siteId = rawId || rawName.toUpperCase();
-        const siteName = rawName || rawId;
-
-        const uniqueKey = `${siteId}___${siteName}`;
-        if (seenKeys.has(uniqueKey)) continue;
-        seenKeys.add(uniqueKey);
-
-        sites.push({
-          siteId,
-          siteName,
-          siteOwner: cols[2]?.replace(/^"+|"+$/g, '').trim(),
-          city: cols[4]?.replace(/^"+|"+$/g, '').trim(),
-          cluster: cols[8]?.replace(/^"+|"+$/g, '').trim(),
-          subdistrict: cols[9]?.replace(/^"+|"+$/g, '').trim(),
-          village: cols[10]?.replace(/^"+|"+$/g, '').trim(),
-        });
+    // Fallback if primary sheet is restricted or returns empty HTML sign-in page
+    if (sites.length === 0) {
+      try {
+        const resFallback = await fetch(FALLBACK_SHEET_URL);
+        if (resFallback.ok) {
+          const csvFallback = await resFallback.text();
+          sites = parseCSVToSites(csvFallback);
+        }
+      } catch (err) {
+        console.warn('Failed fetching fallback master site DB:', err);
       }
+    }
 
-      if (sites.length > 0) {
-        inMemorySiteDatabase = sites;
-        if (typeof window !== 'undefined') {
-          try {
-            localStorage.setItem(LOCAL_STORAGE_CACHE_KEY, JSON.stringify(sites));
-          } catch {
-            // Ignored if storage full
-          }
+    if (sites.length > 0) {
+      inMemorySiteDatabase = sites;
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem(LOCAL_STORAGE_CACHE_KEY, JSON.stringify(sites));
+        } catch {
+          // Storage full
         }
       }
-
-      return sites;
-    } catch (err) {
-      console.warn('Failed fetching master site database from Google Sheet:', err);
-      return inMemorySiteDatabase || [];
-    } finally {
-      fetchPromise = null;
     }
+
+    return sites;
   })();
 
   return fetchPromise;
@@ -147,55 +173,39 @@ export async function getMasterSiteDatabase(): Promise<DatabaseSite[]> {
  * Background refresh without blocking initial load
  */
 async function refreshSiteDatabaseInBackground(): Promise<void> {
+  let sites: DatabaseSite[] = [];
+
   try {
-    const response = await fetch(GOOGLE_SHEETS_CSV_URL);
-    if (!response.ok) return;
-    const csvText = await response.text();
-    const lines = csvText.split('\n');
-
-    const sites: DatabaseSite[] = [];
-    const seenKeys = new Set<string>();
-
-    for (let i = 1; i < lines.length; i++) {
-      const line = lines[i]?.trim();
-      if (!line) continue;
-
-      const cols = parseCSVLine(line);
-      const rawName = cols[0]?.replace(/^"+|"+$/g, '').trim() || '';
-      const rawId = cols[1]?.replace(/^"+|"+$/g, '').trim().toUpperCase() || '';
-
-      if (!rawName && !rawId) continue;
-
-      const siteId = rawId || rawName.toUpperCase();
-      const siteName = rawName || rawId;
-
-      const uniqueKey = `${siteId}___${siteName}`;
-      if (seenKeys.has(uniqueKey)) continue;
-      seenKeys.add(uniqueKey);
-
-      sites.push({
-        siteId,
-        siteName,
-        siteOwner: cols[2]?.replace(/^"+|"+$/g, '').trim(),
-        city: cols[4]?.replace(/^"+|"+$/g, '').trim(),
-        cluster: cols[8]?.replace(/^"+|"+$/g, '').trim(),
-        subdistrict: cols[9]?.replace(/^"+|"+$/g, '').trim(),
-        village: cols[10]?.replace(/^"+|"+$/g, '').trim(),
-      });
-    }
-
-    if (sites.length > 0) {
-      inMemorySiteDatabase = sites;
-      if (typeof window !== 'undefined') {
-        try {
-          localStorage.setItem(LOCAL_STORAGE_CACHE_KEY, JSON.stringify(sites));
-        } catch {
-          // Ignored
-        }
-      }
+    const resPrimary = await fetch(PRIMARY_SHEET_URL);
+    if (resPrimary.ok) {
+      const csvPrimary = await resPrimary.text();
+      sites = parseCSVToSites(csvPrimary);
     }
   } catch {
-    // Silent background fail
+    // Ignored
+  }
+
+  if (sites.length === 0) {
+    try {
+      const resFallback = await fetch(FALLBACK_SHEET_URL);
+      if (resFallback.ok) {
+        const csvFallback = await resFallback.text();
+        sites = parseCSVToSites(csvFallback);
+      }
+    } catch {
+      // Ignored
+    }
+  }
+
+  if (sites.length > 0) {
+    inMemorySiteDatabase = sites;
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(LOCAL_STORAGE_CACHE_KEY, JSON.stringify(sites));
+      } catch {
+        // Ignored
+      }
+    }
   }
 }
 
@@ -204,7 +214,7 @@ async function refreshSiteDatabaseInBackground(): Promise<void> {
  */
 export function searchMasterSites(database: DatabaseSite[], query: string, limit = 25): DatabaseSite[] {
   if (!query || !query.trim()) {
-    return database.slice(0, 10);
+    return database.slice(0, 15);
   }
 
   const q = query.trim().toLowerCase();
@@ -216,14 +226,15 @@ export function searchMasterSites(database: DatabaseSite[], query: string, limit
   for (const site of database) {
     const sId = site.siteId.toLowerCase();
     const sName = site.siteName.toLowerCase();
+    const mId = (site.meterId || '').toLowerCase();
     const sub = (site.subdistrict || '').toLowerCase();
     const vil = (site.village || '').toLowerCase();
 
-    if (sId === q || sName === q) {
+    if (sId === q || sName === q || mId === q) {
       exactId.push(site);
-    } else if (sId.startsWith(q) || sName.startsWith(q)) {
+    } else if (sId.startsWith(q) || sName.startsWith(q) || mId.startsWith(q)) {
       prefixId.push(site);
-    } else if (sId.includes(q) || sName.includes(q) || sub.includes(q) || vil.includes(q)) {
+    } else if (sId.includes(q) || sName.includes(q) || mId.includes(q) || sub.includes(q) || vil.includes(q)) {
       containsIdOrName.push(site);
     }
 

@@ -46,8 +46,8 @@ export const AddSiteModal: React.FC<AddSiteModalProps> = ({
   // Update suggestions whenever siteId or siteName changes
   const handleSiteIdChange = (val: string) => {
     setSiteId(val);
-    if (val.trim().length >= 1 && masterDatabase.length > 0) {
-      const results = searchMasterSites(masterDatabase, val, 15);
+    if (masterDatabase.length > 0) {
+      const results = searchMasterSites(masterDatabase, val, 20);
       setSuggestions(results);
       setShowSuggestions(results.length > 0);
     } else {
@@ -57,8 +57,8 @@ export const AddSiteModal: React.FC<AddSiteModalProps> = ({
 
   const handleSiteNameChange = (val: string) => {
     setSiteName(val);
-    if (val.trim().length >= 2 && masterDatabase.length > 0 && !showSuggestions) {
-      const results = searchMasterSites(masterDatabase, val, 15);
+    if (masterDatabase.length > 0) {
+      const results = searchMasterSites(masterDatabase, val, 20);
       setSuggestions(results);
       setShowSuggestions(results.length > 0);
     }
@@ -74,6 +74,9 @@ export const AddSiteModal: React.FC<AddSiteModalProps> = ({
 
     setSiteId(formattedId);
     setSiteName(formattedName);
+    if (item.meterId) {
+      setMeterId(item.meterId);
+    }
     setShowSuggestions(false);
   };
 
@@ -182,8 +185,10 @@ export const AddSiteModal: React.FC<AddSiteModalProps> = ({
                 value={siteId}
                 onChange={(e) => handleSiteIdChange(e.target.value)}
                 onFocus={() => {
-                  if (siteId.trim().length >= 1 && suggestions.length > 0) {
-                    setShowSuggestions(true);
+                  if (masterDatabase.length > 0) {
+                    const results = searchMasterSites(masterDatabase, siteId, 20);
+                    setSuggestions(results);
+                    setShowSuggestions(results.length > 0);
                   }
                 }}
                 placeholder="Ketik Site ID (contoh: BKS598, JKT781, EPE...)"
