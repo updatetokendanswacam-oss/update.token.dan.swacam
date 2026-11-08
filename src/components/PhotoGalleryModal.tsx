@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Download, Trash2, Shield, Clock, User as UserIcon, AlertTriangle, Loader2, CheckCircle2 } from 'lucide-react';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '../firebase';
 import { SiteItem, User, PhotoRecord } from '../types';
 import { getPhotoWatermarkBrand } from '../utils/watermark';
-import { getOptimizedPhotoUrl } from '../utils/photoCache';
+import { getOptimizedPhotoUrl, cachePhotoUrl } from '../utils/photoCache';
 
 interface PhotoGalleryModalProps {
   site: SiteItem;
@@ -26,15 +28,42 @@ export const PhotoGalleryModal: React.FC<PhotoGalleryModalProps> = ({
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteNotice, setDeleteNotice] = useState<string | null>(null);
+  const [recoveredUrl, setRecoveredUrl] = useState<string | null>(null);
 
   const activePhoto = photos[currentIndex];
   const isAdmin = currentUser?.role === 'admin';
+
+  useEffect(() => {
+    setRecoveredUrl(null);
+    if (!activePhoto) return;
+
+    const bestUrl = getOptimizedPhotoUrl(activePhoto) || activePhoto.dataUrl || activePhoto.storageUrl;
+    if (bestUrl) {
+      setRecoveredUrl(bestUrl);
+      return;
+    }
+
+    if (activePhoto.id) {
+      getDoc(doc(db, 'photos', activePhoto.id))
+        .then((snap) => {
+          if (snap.exists()) {
+            const p = snap.data() as PhotoRecord;
+            const url = p.dataUrl || p.storageUrl || '';
+            if (url) {
+              cachePhotoUrl(activePhoto.id, url);
+              setRecoveredUrl(url);
+            }
+          }
+        })
+        .catch(() => {});
+    }
+  }, [activePhoto?.id]);
 
   if (!activePhoto) {
     return null;
   }
 
-  const imageUrl = getOptimizedPhotoUrl(activePhoto) || activePhoto.dataUrl || activePhoto.storageUrl;
+  const imageUrl = recoveredUrl || getOptimizedPhotoUrl(activePhoto) || activePhoto.dataUrl || activePhoto.storageUrl;
 
   const handleDownload = () => {
     if (!imageUrl) return;
@@ -122,7 +151,7 @@ export const PhotoGalleryModal: React.FC<PhotoGalleryModalProps> = ({
 
         {/* Main Image Viewer */}
         <div className="flex-1 bg-black flex items-center justify-center p-3 relative overflow-hidden min-h-[300px]">
-          {imageUrl ? (
+          {imageUrl && imageUrl.trim() !== '' ? (
             <img
               src={imageUrl}
               alt={`Dokumentasi Catat Meter ${site.siteId}`}

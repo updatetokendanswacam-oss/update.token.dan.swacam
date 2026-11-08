@@ -265,24 +265,29 @@ const SiteItemCard: React.FC<SiteItemCardProps> = React.memo(({
                   <div className="flex items-center gap-2 mt-2 overflow-x-auto pb-1">
                     {site.photos.map((photo, pIdx) => {
                       const photoUrl = getOptimizedPhotoUrl(photo);
+                      const validSrc = photoUrl && photoUrl.trim() !== '' ? photoUrl : undefined;
                       return (
                         <div
                           key={photo.id || pIdx}
                           onClick={() => onViewPhoto(site, pIdx)}
-                          className="relative group shrink-0 w-20 h-14 rounded-lg overflow-hidden border border-slate-200 cursor-pointer bg-slate-100"
+                          className="relative group shrink-0 w-20 h-14 rounded-lg overflow-hidden border border-slate-200 cursor-pointer bg-slate-100 flex items-center justify-center"
                         >
-                          <img
-                            src={photoUrl}
-                            alt="Foto Meter"
-                            loading="lazy"
-                            decoding="async"
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                            onError={(e) => {
-                              if (photo.dataUrl && e.currentTarget.src !== photo.dataUrl) {
-                                e.currentTarget.src = photo.dataUrl;
-                              }
-                            }}
-                          />
+                          {validSrc ? (
+                            <img
+                              src={validSrc}
+                              alt="Foto Meter"
+                              loading="lazy"
+                              decoding="async"
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                              onError={(e) => {
+                                if (photo.dataUrl && e.currentTarget.src !== photo.dataUrl) {
+                                  e.currentTarget.src = photo.dataUrl;
+                                }
+                              }}
+                            />
+                          ) : (
+                            <span className="text-[9px] text-slate-400 font-medium">Memuat...</span>
+                          )}
                           <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white">
                             <Eye className="w-3.5 h-3.5" />
                           </div>

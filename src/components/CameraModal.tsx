@@ -210,7 +210,7 @@ export const CameraModal: React.FC<CameraModalProps> = ({
               <p className="text-sm font-semibold text-slate-300">Menempelkan Watermark & Geotag {brandTitle}...</p>
               <p className="text-xs text-slate-400">Site ID, Geotag Lokasi, Meter ID, Tanggal & Jam WIB</p>
             </div>
-          ) : previewWatermarked ? (
+          ) : previewWatermarked && previewWatermarked.dataUrl && previewWatermarked.dataUrl.trim() !== '' ? (
             /* Preview with Watermark */
             <div className="space-y-3">
               <div className="relative rounded-2xl overflow-hidden border border-blue-500/40 bg-black">

@@ -456,7 +456,7 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
               {/* Connected Google Account Header */}
               <div className="p-3 rounded-2xl bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200/80 dark:border-emerald-800/60 flex items-center justify-between">
                 <div className="flex items-center gap-2.5">
-                  {googleUser.photoURL ? (
+                  {googleUser.photoURL && googleUser.photoURL.trim() !== '' ? (
                     <img
                       src={googleUser.photoURL}
                       alt={googleUser.displayName || 'Google User'}

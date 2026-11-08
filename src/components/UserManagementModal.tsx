@@ -449,7 +449,7 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
                     >
                       <div className="flex items-center gap-3 min-w-0 flex-1">
                         <img
-                          src={user.avatar || '/logo.png'}
+                          src={user.avatar && user.avatar.trim() !== '' ? user.avatar : '/logo.png'}
                           alt={user.name}
                           className="w-9 h-9 rounded-full object-cover border border-slate-200"
                         />

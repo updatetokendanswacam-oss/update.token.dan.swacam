@@ -52,7 +52,7 @@ export const TeamStatusRoster: React.FC<TeamStatusRosterProps> = React.memo(({ u
             >
               <div className="relative shrink-0">
                 <img
-                  src={user.avatar || '/logo.png'}
+                  src={user.avatar && user.avatar.trim() !== '' ? user.avatar : '/logo.png'}
                   alt={user.name}
                   loading="lazy"
                   className="w-7 h-7 rounded-full object-cover bg-white border border-slate-200"

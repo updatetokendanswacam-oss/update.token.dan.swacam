@@ -153,7 +153,7 @@ export const SettingsView: React.FC<SettingsViewProps> = React.memo(({
         <div className="flex flex-col sm:flex-row items-center gap-5 pb-5 border-b border-slate-100">
           <div className="relative group shrink-0">
             <img
-              src={avatarPreview}
+              src={avatarPreview && avatarPreview.trim() !== '' ? avatarPreview : '/logo.png'}
               alt={currentUser.name}
               className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl object-cover border-2 border-slate-200 shadow-sm bg-white"
             />

@@ -135,7 +135,7 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({
           <div className="flex flex-col items-center justify-center p-4 rounded-2xl bg-slate-50 border border-slate-200 text-center">
             <div className="relative group mb-3">
               <img
-                src={avatarPreview}
+                src={avatarPreview && avatarPreview.trim() !== '' ? avatarPreview : '/logo.png'}
                 alt={currentUser.name}
                 className="w-20 h-20 rounded-2xl object-cover border-2 border-slate-300 shadow-sm"
               />
