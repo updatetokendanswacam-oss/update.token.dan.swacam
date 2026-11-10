@@ -28,7 +28,7 @@ export const WhatsAppModal: React.FC<WhatsAppModalProps> = ({
       : getRealTimeWIBDateString();
   });
 
-  // Ticking WIB calendar day for NETECO UNMON category: follows real-time WIB date automatically without jam/time
+  // Ticking WIB calendar day for NETECO UNMON category: automatically tracks real-time WIB date when day changes (without jam/time)
   useEffect(() => {
     if (!isNeteco || userHasCustomPeriod) return;
     const timer = setInterval(() => {
