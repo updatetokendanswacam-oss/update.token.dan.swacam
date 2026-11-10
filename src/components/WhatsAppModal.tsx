@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Copy, Check, Share2, MessageSquare, Calendar, RefreshCw } from 'lucide-react';
 import { UpdateCategory } from '../types';
 import { getRealTimeWIBDateString } from './AddCategoryModal';
@@ -14,13 +14,28 @@ export const WhatsAppModal: React.FC<WhatsAppModalProps> = ({
   onClose,
   initialFilter = 'all',
 }) => {
+  const isNeteco = category.type === 'neteco_unmon' || category.title.toLowerCase().includes('neteco');
   const [copied, setCopied] = useState(false);
   const [filterMode, setFilterMode] = useState<'all' | 'unchecked' | 'checked'>(initialFilter);
+  const [userHasCustomPeriod, setUserHasCustomPeriod] = useState(false);
+
   const [periodInput, setPeriodInput] = useState<string>(() => {
+    if (isNeteco) {
+      return getRealTimeWIBDateString();
+    }
     return category.period && category.period.trim() !== ''
       ? category.period.trim()
       : getRealTimeWIBDateString();
   });
+
+  // Ticking WIB calendar day for NETECO UNMON category: follows real-time WIB date automatically without jam/time
+  useEffect(() => {
+    if (!isNeteco || userHasCustomPeriod) return;
+    const timer = setInterval(() => {
+      setPeriodInput(getRealTimeWIBDateString());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [isNeteco, userHasCustomPeriod]);
 
   const totalSites = category.sites.length;
   const checkedSites = category.sites.filter((s) => s.checked).length;
@@ -31,7 +46,6 @@ export const WhatsAppModal: React.FC<WhatsAppModalProps> = ({
       : '0,00';
 
   const buildWhatsAppText = () => {
-    const isNeteco = category.type === 'neteco_unmon' || category.title.toLowerCase().includes('neteco');
     const isStandby = category.type === 'standby_team' || category.title.toLowerCase().includes('standby') || category.title.toLowerCase().includes('jadwal');
 
     const titleLine = category.title ? category.title.trim() : 'Update List – DEPOTEL';
@@ -244,15 +258,21 @@ export const WhatsAppModal: React.FC<WhatsAppModalProps> = ({
             <input
               type="text"
               value={periodInput}
-              onChange={(e) => setPeriodInput(e.target.value)}
-              placeholder="Contoh: Hari Sabtu - 31 Oktober 2026"
+              onChange={(e) => {
+                setUserHasCustomPeriod(true);
+                setPeriodInput(e.target.value);
+              }}
+              placeholder="Contoh: Hari Selasa - 10 November 2026"
               className="flex-1 px-2.5 py-1.5 rounded-lg border border-slate-300 font-semibold text-slate-900 bg-white focus:outline-none focus:border-emerald-600"
             />
           </div>
 
           <button
             type="button"
-            onClick={() => setPeriodInput(getRealTimeWIBDateString())}
+            onClick={() => {
+              setUserHasCustomPeriod(false);
+              setPeriodInput(getRealTimeWIBDateString());
+            }}
             className="px-3 py-1.5 rounded-lg bg-emerald-100 hover:bg-emerald-200 text-emerald-800 text-[11px] font-bold flex items-center justify-center gap-1 transition cursor-pointer shrink-0"
             title="Suntikkan Tanggal WIB Real-Time Kalender"
           >
